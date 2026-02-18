@@ -181,6 +181,24 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         const config = await configService.getTranscriptConfig();
         if (config) {
           console.log('[ConfigContext] Loaded saved transcript config:', config);
+
+          // For custom-asr, fetch the full config to get the model name
+          if (config.provider === 'custom-asr') {
+            try {
+              const asrConfig = await configService.getCustomASRConfig();
+              if (asrConfig) {
+                setTranscriptModelConfig({
+                  provider: 'custom-asr',
+                  model: asrConfig.model || config.model,
+                  apiKey: asrConfig.apiKey || null,
+                });
+                return;
+              }
+            } catch (err) {
+              console.error('[ConfigContext] Failed to fetch custom ASR config:', err);
+            }
+          }
+
           setTranscriptModelConfig({
             provider: config.provider || 'parakeet',
             model: config.model || 'parakeet-tdt-0.6b-v3-int8',

@@ -5,6 +5,7 @@ use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
 use crate::{
+    audio::transcription::custom_asr_provider::CustomASRConfig,
     database::{
         models::MeetingModel,
         repositories::{
@@ -1374,6 +1375,204 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
             log_error!("❌ Custom OpenAI connection test failed: {}", e);
             if e.is_timeout() {
                 Err("Connection timed out. Please check the endpoint URL.".to_string())
+            } else if e.is_connect() {
+                Err("Could not connect to endpoint. Please verify the URL is correct and the server is running.".to_string())
+            } else {
+                Err(format!("Connection failed: {}", e))
+            }
+        }
+    }
+}
+
+// ===== CUSTOM ASR ENDPOINT COMMANDS =====
+
+/// Saves the custom ASR endpoint configuration
+#[tauri::command]
+pub async fn api_save_custom_asr_config<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    endpoint: String,
+    api_key: Option<String>,
+    model: String,
+    language: Option<String>,
+) -> Result<serde_json::Value, String> {
+    log_info!(
+        "api_save_custom_asr_config called: endpoint='{}', model='{}'",
+        &endpoint,
+        &model
+    );
+
+    // Validate required fields
+    if endpoint.trim().is_empty() {
+        return Err("Endpoint URL is required".to_string());
+    }
+    if model.trim().is_empty() {
+        return Err("Model name is required".to_string());
+    }
+
+    // Validate endpoint URL format
+    if !endpoint.starts_with("http://") && !endpoint.starts_with("https://") {
+        return Err("Endpoint must start with http:// or https://".to_string());
+    }
+
+    let config = CustomASRConfig {
+        endpoint: endpoint.trim().to_string(),
+        api_key: api_key.filter(|k| !k.trim().is_empty()),
+        model: model.trim().to_string(),
+        language: language.filter(|l| !l.trim().is_empty()),
+    };
+
+    let pool = state.db_manager.pool();
+
+    match SettingsRepository::save_custom_asr_config(pool, &config).await {
+        Ok(()) => {
+            log_info!(
+                "✅ Successfully saved custom ASR config for endpoint: {}",
+                config.endpoint
+            );
+            Ok(serde_json::json!({
+                "status": "success",
+                "message": "Custom ASR configuration saved successfully"
+            }))
+        }
+        Err(e) => {
+            log_error!("❌ Failed to save custom ASR config: {}", e);
+            Err(format!("Failed to save custom ASR configuration: {}", e))
+        }
+    }
+}
+
+/// Gets the custom ASR endpoint configuration
+#[tauri::command]
+pub async fn api_get_custom_asr_config<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<CustomASRConfig>, String> {
+    log_info!("api_get_custom_asr_config called");
+
+    let pool = state.db_manager.pool();
+
+    match SettingsRepository::get_custom_asr_config(pool).await {
+        Ok(config) => {
+            if let Some(ref c) = config {
+                log_info!(
+                    "✅ Found custom ASR config: endpoint='{}', model='{}'",
+                    c.endpoint,
+                    c.model
+                );
+            } else {
+                log_info!("No custom ASR config found");
+            }
+            Ok(config)
+        }
+        Err(e) => {
+            log_error!("❌ Failed to get custom ASR config: {}", e);
+            Err(format!("Failed to get custom ASR configuration: {}", e))
+        }
+    }
+}
+
+/// Tests the connection to a custom ASR endpoint
+/// Sends a short silent WAV to verify the endpoint is reachable and responds correctly
+#[tauri::command]
+pub async fn api_test_custom_asr_connection<R: Runtime>(
+    _app: AppHandle<R>,
+    endpoint: String,
+    api_key: Option<String>,
+    model: String,
+) -> Result<serde_json::Value, String> {
+    log_info!(
+        "api_test_custom_asr_connection called: endpoint='{}', model='{}'",
+        &endpoint,
+        &model
+    );
+
+    // Validate endpoint URL format
+    if !endpoint.starts_with("http://") && !endpoint.starts_with("https://") {
+        return Err("Endpoint must start with http:// or https://".to_string());
+    }
+
+    // Create a short 1-second silent WAV for testing
+    let silent_samples: Vec<f32> = vec![0.0; 16000]; // 1 second at 16kHz
+    let wav_bytes =
+        crate::audio::transcription::custom_asr_provider::CustomASRProvider::encode_wav(
+            &silent_samples,
+            16000,
+        );
+
+    let url = format!(
+        "{}/audio/transcriptions",
+        endpoint.trim_end_matches('/')
+    );
+
+    let file_part = reqwest::multipart::Part::bytes(wav_bytes)
+        .file_name("test.wav")
+        .mime_str("audio/wav")
+        .map_err(|e| format!("Failed to create multipart: {}", e))?;
+
+    let form = reqwest::multipart::Form::new()
+        .part("file", file_part)
+        .text("model", model)
+        .text("response_format", "json".to_string());
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let mut request = client.post(&url).multipart(form);
+
+    if let Some(key) = api_key.filter(|k| !k.trim().is_empty()) {
+        request = request.header("Authorization", format!("Bearer {}", key));
+    }
+
+    match request.send().await {
+        Ok(response) => {
+            let status = response.status();
+            let response_text = response.text().await.unwrap_or_default();
+
+            if status.is_success() {
+                // Try to parse as JSON to verify it's a valid response
+                match serde_json::from_str::<serde_json::Value>(&response_text) {
+                    Ok(json) => {
+                        if json.get("text").is_some() {
+                            log_info!("✅ Custom ASR connection test successful - response validated");
+                            Ok(serde_json::json!({
+                                "status": "success",
+                                "message": "Connection successful and response validated",
+                                "http_status": status.as_u16()
+                            }))
+                        } else {
+                            log_warn!("⚠️ ASR endpoint returned 200 but response missing 'text' field: {}", response_text);
+                            Err("Endpoint is reachable but response doesn't match OpenAI transcription format (missing 'text' field).".to_string())
+                        }
+                    }
+                    Err(e) => {
+                        log_warn!("⚠️ ASR endpoint returned 200 but response is not valid JSON: {}", e);
+                        Err(format!(
+                            "Endpoint is reachable but returned invalid JSON: {}",
+                            e
+                        ))
+                    }
+                }
+            } else {
+                log_warn!(
+                    "⚠️ Custom ASR connection test failed with status {}: {}",
+                    status,
+                    response_text
+                );
+                Err(format!(
+                    "Connection failed with status {}: {}",
+                    status, response_text
+                ))
+            }
+        }
+        Err(e) => {
+            log_error!("❌ Custom ASR connection test failed: {}", e);
+            if e.is_timeout() {
+                Err(
+                    "Connection timed out. Please check the endpoint URL.".to_string(),
+                )
             } else if e.is_connect() {
                 Err("Could not connect to endpoint. Please verify the URL is correct and the server is running.".to_string())
             } else {

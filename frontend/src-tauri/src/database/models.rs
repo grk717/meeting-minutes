@@ -127,4 +127,8 @@ pub struct TranscriptSetting {
     #[sqlx(rename = "openaiApiKey")]
     #[serde(rename = "openaiApiKey")]
     pub openai_api_key: Option<String>,
+    /// Custom ASR endpoint configuration stored as JSON
+    #[sqlx(rename = "customASRConfig")]
+    #[serde(rename = "customASRConfig")]
+    pub custom_asr_config: Option<String>,
 }

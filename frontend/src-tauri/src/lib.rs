@@ -639,6 +639,10 @@ pub fn run() {
             api::api_save_custom_openai_config,
             api::api_get_custom_openai_config,
             api::api_test_custom_openai_connection,
+            // Custom ASR endpoint commands
+            api::api_save_custom_asr_config,
+            api::api_get_custom_asr_config,
+            api::api_test_custom_asr_connection,
             // Summary commands
             summary::api_process_transcript,
             summary::api_get_summary,

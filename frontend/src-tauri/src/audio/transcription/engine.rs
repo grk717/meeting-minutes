@@ -135,10 +135,28 @@ pub async fn validate_transcription_model_ready<R: Runtime>(app: &AppHandle<R>) 
                 }
             }
         }
+        "custom-asr" => {
+            info!("🌐 Validating Custom ASR endpoint...");
+            let pool = app.state::<crate::state::AppState>().db_manager.pool();
+            let config = crate::database::repositories::setting::SettingsRepository::get_custom_asr_config(pool)
+                .await
+                .map_err(|e| format!("Failed to get custom ASR config: {}", e))?
+                .ok_or("Custom ASR endpoint not configured. Please configure it in Transcript Settings.")?;
+
+            if config.endpoint.trim().is_empty() {
+                return Err("Custom ASR endpoint URL is empty. Please configure it in Transcript Settings.".to_string());
+            }
+            if !config.endpoint.starts_with("http://") && !config.endpoint.starts_with("https://") {
+                return Err("Custom ASR endpoint must start with http:// or https://".to_string());
+            }
+
+            info!("✅ Custom ASR endpoint validated: {}", config.endpoint);
+            Ok(())
+        }
         other => {
-            warn!("❌ Unsupported transcription provider for local recording: {}", other);
+            warn!("❌ Unsupported transcription provider: {}", other);
             Err(format!(
-                "Provider '{}' is not supported for local transcription. Please select 'localWhisper' or 'parakeet'.",
+                "Provider '{}' is not supported for transcription. Please select 'localWhisper', 'parakeet', or 'custom-asr'.",
                 other
             ))
         }
@@ -211,6 +229,20 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
                     Err("Parakeet engine not initialized. This should not happen after validation.".to_string())
                 }
             }
+        }
+        "custom-asr" => {
+            info!("🌐 Initializing Custom ASR transcription engine");
+            let pool = app.state::<crate::state::AppState>().db_manager.pool();
+            let asr_config = crate::database::repositories::setting::SettingsRepository::get_custom_asr_config(pool)
+                .await
+                .map_err(|e| format!("Failed to get custom ASR config: {}", e))?
+                .ok_or("Custom ASR endpoint not configured. Please configure it in Transcript Settings.")?;
+
+            info!("🌐 Custom ASR endpoint: {}, model: {}", asr_config.endpoint, asr_config.model);
+            let provider = super::custom_asr_provider::CustomASRProvider::new(asr_config)
+                .map_err(|e| format!("Failed to create Custom ASR provider: {}", e))?;
+
+            Ok(TranscriptionEngine::Provider(Arc::new(provider)))
         }
         "localWhisper" | _ => {
             info!("🎤 Initializing Whisper transcription engine");

@@ -1,3 +1,4 @@
+use crate::audio::transcription::custom_asr_provider::CustomASRConfig;
 use crate::database::models::{Setting, TranscriptSetting};
 use crate::summary::CustomOpenAIConfig;
 use sqlx::SqlitePool;
@@ -180,6 +181,7 @@ impl SettingsRepository {
         let api_key_column = match provider {
             "localWhisper" => "whisperApiKey",
             "parakeet" => return Ok(()), // Parakeet doesn't need an API key, return early
+            "custom-asr" => return Ok(()), // Custom ASR uses JSON config (customASRConfig) for API key
             "deepgram" => "deepgramApiKey",
             "elevenLabs" => "elevenLabsApiKey",
             "groq" => "groqApiKey",
@@ -209,6 +211,12 @@ impl SettingsRepository {
         pool: &SqlitePool,
         provider: &str,
     ) -> std::result::Result<Option<String>, sqlx::Error> {
+        // Custom ASR uses JSON config - extract API key from there
+        if provider == "custom-asr" {
+            let config = Self::get_custom_asr_config(pool).await?;
+            return Ok(config.and_then(|c| c.api_key));
+        }
+
         let api_key_column = match provider {
             "localWhisper" => "whisperApiKey",
             "parakeet" => return Ok(None), // Parakeet doesn't need an API key
@@ -336,6 +344,72 @@ impl SettingsRepository {
             VALUES ('1', 'custom-openai', $1, 'large-v3', $2)
             ON CONFLICT(id) DO UPDATE SET
                 customOpenAIConfig = excluded.customOpenAIConfig
+            "#,
+        )
+        .bind(&config.model)
+        .bind(config_json)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    // ===== CUSTOM ASR CONFIG METHODS =====
+
+    /// Gets the custom ASR endpoint configuration from JSON
+    pub async fn get_custom_asr_config(
+        pool: &SqlitePool,
+    ) -> std::result::Result<Option<CustomASRConfig>, sqlx::Error> {
+        use sqlx::Row;
+
+        let row = sqlx::query(
+            r#"
+            SELECT customASRConfig
+            FROM transcript_settings
+            WHERE id = '1'
+            LIMIT 1
+            "#
+        )
+        .fetch_optional(pool)
+        .await?;
+
+        match row {
+            Some(record) => {
+                let config_json: Option<String> = record.get("customASRConfig");
+
+                if let Some(json) = config_json {
+                    let config: CustomASRConfig = serde_json::from_str(&json)
+                        .map_err(|e| sqlx::Error::Protocol(
+                            format!("Invalid JSON in customASRConfig: {}", e).into()
+                        ))?;
+
+                    Ok(Some(config))
+                } else {
+                    Ok(None)
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Saves the custom ASR endpoint configuration as JSON
+    pub async fn save_custom_asr_config(
+        pool: &SqlitePool,
+        config: &CustomASRConfig,
+    ) -> std::result::Result<(), sqlx::Error> {
+        let config_json = serde_json::to_string(config)
+            .map_err(|e| sqlx::Error::Protocol(
+                format!("Failed to serialize custom ASR config to JSON: {}", e).into()
+            ))?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO transcript_settings (id, provider, model, customASRConfig)
+            VALUES ('1', 'custom-asr', $1, $2)
+            ON CONFLICT(id) DO UPDATE SET
+                provider = 'custom-asr',
+                model = excluded.model,
+                customASRConfig = excluded.customASRConfig
             "#,
         )
         .bind(&config.model)

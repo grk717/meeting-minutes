@@ -36,6 +36,13 @@ export interface CustomOpenAIConfig {
   topP: number | null;
 }
 
+export interface CustomASRConfig {
+  endpoint: string;
+  apiKey: string | null;
+  model: string;
+  language: string | null;
+}
+
 export interface RecordingPreferences {
   preferred_mic_device: string | null;
   preferred_system_device: string | null;
@@ -119,6 +126,47 @@ export class ConfigService {
     model: string
   ): Promise<{ status: string; message: string; http_status?: number }> {
     return invoke<{ status: string; message: string; http_status?: number }>('api_test_custom_openai_connection', {
+      endpoint,
+      apiKey,
+      model,
+    });
+  }
+
+  /**
+   * Get custom ASR endpoint configuration
+   * @returns Promise with CustomASRConfig or null if not configured
+   */
+  async getCustomASRConfig(): Promise<CustomASRConfig | null> {
+    return invoke<CustomASRConfig | null>('api_get_custom_asr_config');
+  }
+
+  /**
+   * Save custom ASR endpoint configuration
+   * @param config - CustomASRConfig to save
+   * @returns Promise with result status
+   */
+  async saveCustomASRConfig(config: CustomASRConfig): Promise<{ status: string; message: string }> {
+    return invoke<{ status: string; message: string }>('api_save_custom_asr_config', {
+      endpoint: config.endpoint,
+      apiKey: config.apiKey,
+      model: config.model,
+      language: config.language,
+    });
+  }
+
+  /**
+   * Test custom ASR endpoint connection
+   * @param endpoint - API endpoint URL
+   * @param apiKey - Optional API key
+   * @param model - Model name
+   * @returns Promise with test result
+   */
+  async testCustomASRConnection(
+    endpoint: string,
+    apiKey: string | null,
+    model: string
+  ): Promise<{ status: string; message: string; http_status?: number }> {
+    return invoke<{ status: string; message: string; http_status?: number }>('api_test_custom_asr_connection', {
       endpoint,
       apiKey,
       model,
