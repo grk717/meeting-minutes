@@ -433,7 +433,8 @@ $env:RUST_LOG="debug"; ./clean_run_windows.bat
   - `main`: Stable releases
   - `fix/*`: Bug fixes
   - `enhance/*`: Feature enhancements
-  - Current: `fix/audio-mixing` (working on audio pipeline improvements)
+  - Current: `enhance/custom-asr-endpoint` (working on audio pipeline improvements)
+  - After each change - commit to the fork.
 
 ## Key Files Reference
 

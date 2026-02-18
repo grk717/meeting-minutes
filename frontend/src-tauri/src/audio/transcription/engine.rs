@@ -137,7 +137,8 @@ pub async fn validate_transcription_model_ready<R: Runtime>(app: &AppHandle<R>) 
         }
         "custom-asr" => {
             info!("🌐 Validating Custom ASR endpoint...");
-            let pool = app.state::<crate::state::AppState>().db_manager.pool();
+            let app_state = app.state::<crate::state::AppState>();
+            let pool = app_state.db_manager.pool();
             let config = crate::database::repositories::setting::SettingsRepository::get_custom_asr_config(pool)
                 .await
                 .map_err(|e| format!("Failed to get custom ASR config: {}", e))?
@@ -232,7 +233,8 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
         }
         "custom-asr" => {
             info!("🌐 Initializing Custom ASR transcription engine");
-            let pool = app.state::<crate::state::AppState>().db_manager.pool();
+            let app_state = app.state::<crate::state::AppState>();
+            let pool = app_state.db_manager.pool();
             let asr_config = crate::database::repositories::setting::SettingsRepository::get_custom_asr_config(pool)
                 .await
                 .map_err(|e| format!("Failed to get custom ASR config: {}", e))?
