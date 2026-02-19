@@ -30,13 +30,20 @@ python-frontend/
     ├── main.py                        # Entry point — QApplication, dark theme
     ├── audio/
     │   ├── __init__.py                # Exports AudioManager, AudioDevice, RecordingState
-    │   ├── manager.py                 # Core audio engine (~540 lines)
+    │   ├── manager.py                 # Core audio engine (~600 lines)
     │   └── loopback_win.py            # Windows WASAPI loopback capture (~300 lines)
+    ├── transcription/
+    │   ├── __init__.py                # Exports TranscriptionManager
+    │   ├── vad.py                     # Voice Activity Detection (~130 lines)
+    │   ├── client.py                  # HTTP ASR client (~70 lines)
+    │   └── manager.py                 # VAD→queue→worker orchestration (~110 lines)
     ├── ui/
     │   ├── __init__.py                # Exports MainWindow
-    │   ├── main_window.py             # Main window with all controls (~350 lines)
+    │   ├── main_window.py             # Main window with all controls (~310 lines)
     │   ├── level_bars.py              # Animated 3-bar audio visualizer (~150 lines)
     │   ├── device_panel.py            # Mic + system audio device selectors (~210 lines)
+    │   ├── transcript_panel.py        # Live transcript display (~80 lines)
+    │   ├── settings_dialog.py         # ASR endpoint settings (~80 lines)
     │   └── theme.py                   # Dark theme QSS stylesheet (~245 lines)
     ├── storage/
     │   └── __init__.py                # Placeholder for Phase 5
@@ -113,17 +120,53 @@ python-frontend/
 #### `meetily/main.py` — Entry Point
 - Sets up logging, creates QApplication, applies dark theme, shows MainWindow
 
-### Phase 3: Cloud Transcription — TODO
+### Phase 3: Cloud Transcription — DONE
 
-- Add Deepgram WebSocket streaming for real-time transcripts during recording
-- Fallback: OpenAI Whisper API batch upload after stop
-- Add Groq Whisper as alternative
-- Display transcript segments in real-time scrollable panel
-- API key management (keyring for secure storage)
-- New files needed:
-  - `meetily/transcription/deepgram_client.py`
-  - `meetily/transcription/openai_client.py`
-  - `meetily/ui/transcript_panel.py`
+**What's implemented:**
+
+#### `meetily/transcription/vad.py` — VadProcessor
+- Voice Activity Detection using `webrtcvad` (aggressiveness=2)
+- Processes float32 16kHz mono audio → splits into 30ms frames → classifies speech/silence
+- State machine: speech start (3 consecutive frames ~90ms), speech end (15 silence frames ~450ms)
+- Bridges natural pauses in speech, rejects segments <0.5s
+- Force-flushes long segments at 30s to bound latency
+- `process_chunk(audio)` → returns completed speech segments as numpy arrays
+- `flush()` → returns any remaining speech at recording end
+
+#### `meetily/transcription/client.py` — TranscriptionClient
+- HTTP client for OpenAI-compatible ASR endpoint (`POST /v1/audio/transcriptions`)
+- Converts numpy float32 → WAV bytes in memory via `soundfile` + `io.BytesIO`
+- Sends multipart form: file=audio.wav, model=whisper-1, response_format=json
+- Supports optional Bearer token API key
+- 30s timeout, returns transcribed text string
+
+#### `meetily/transcription/manager.py` — TranscriptionManager
+- Orchestrates VAD → thread-safe queue → HTTP worker → callbacks
+- `feed_audio(audio)` — called from audio capture thread, runs VAD, enqueues segments
+- Worker daemon thread consumes queue, transcribes each segment, fires callbacks
+- `on_transcript(text, timestamp)` callback for UI (called from worker thread)
+- `on_error(message)` callback for error reporting
+- `start()` / `stop()` lifecycle, `update_settings()` for runtime config changes
+
+#### `meetily/ui/transcript_panel.py` — TranscriptPanel
+- Scrollable `QGroupBox` displaying timestamped transcript segments
+- `add_segment(text, timestamp)` — appends `[MM:SS] text` label, auto-scrolls
+- `clear()` — resets for new recording with placeholder text
+- `get_full_transcript()` — returns all segments as plain text
+- Text-selectable labels for easy copy
+
+#### `meetily/ui/settings_dialog.py` — SettingsDialog
+- `QDialog` for configuring ASR endpoint URL and optional API key
+- Persisted via `QSettings` (cross-platform: Registry on Windows, plist on macOS)
+- Default endpoint: `http://localhost:8178`
+- `get_settings()` static method for loading saved config
+
+#### Integration in `main_window.py`
+- Settings button in header opens `SettingsDialog`
+- On recording start: creates `TranscriptionManager`, wires `AudioManager.on_audio_chunk` → `feed_audio`
+- Transcript segments arrive via Qt signal bridge (worker thread → main thread)
+- On recording stop: flushes remaining speech, stops worker
+- Transcript panel sits below Recording group
 
 ### Phase 4: Summarization — TODO
 

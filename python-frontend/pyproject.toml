@@ -9,6 +9,8 @@ dependencies = [
     "numpy>=1.24",
     "soundfile>=0.12",
     "PyAudioWPatch>=0.2.12; sys_platform == 'win32'",
+    "webrtcvad>=2.0.10",
+    "requests>=2.28",
 ]
 
 [project.optional-dependencies]

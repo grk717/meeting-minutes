@@ -22,8 +22,11 @@ from PySide6.QtWidgets import (
 )
 
 from meetily.audio.manager import AudioLevels, AudioManager, RecordingState
+from meetily.transcription import TranscriptionManager
 from meetily.ui.device_panel import DevicePanel
 from meetily.ui.level_bars import LevelBarsWidget
+from meetily.ui.settings_dialog import SettingsDialog
+from meetily.ui.transcript_panel import TranscriptPanel
 
 log = logging.getLogger(__name__)
 
@@ -65,12 +68,13 @@ class MainWindow(QMainWindow):
     _levels_signal = Signal(AudioLevels)
     _state_signal = Signal(RecordingState)
     _error_signal = Signal(str)
+    _transcript_signal = Signal(str, str)  # (text, timestamp)
 
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Meetily")
         self.setMinimumSize(520, 580)
-        self.resize(560, 640)
+        self.resize(560, 780)
 
         # Audio manager
         self._audio = AudioManager()
@@ -78,10 +82,14 @@ class MainWindow(QMainWindow):
         self._audio.on_state_changed = self._on_audio_state
         self._audio.on_error = self._on_audio_error
 
+        # Transcription manager (created on recording start)
+        self._transcription: TranscriptionManager | None = None
+
         # Connect internal signals (thread-safe bridge)
         self._levels_signal.connect(self._update_levels_ui)
         self._state_signal.connect(self._update_state_ui)
         self._error_signal.connect(self._show_error)
+        self._transcript_signal.connect(self._on_transcript_received)
 
         # Duration timer
         self._duration_timer = QTimer(self)
@@ -98,10 +106,25 @@ class MainWindow(QMainWindow):
         root.setSpacing(20)
 
         # ── Header ──
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+
         header = QLabel("Meetily")
         header.setObjectName("appTitle")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(header)
+
+        self._settings_btn = QPushButton("Settings")
+        self._settings_btn.setObjectName("pauseBtn")
+        self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._settings_btn.setFixedWidth(70)
+        self._settings_btn.clicked.connect(self._open_settings)
+
+        header_row.addStretch()
+        header_row.addWidget(header)
+        header_row.addStretch()
+        header_row.addWidget(self._settings_btn)
+
+        root.addLayout(header_row)
 
         subtitle = QLabel("AI Meeting Assistant")
         subtitle.setObjectName("appSubtitle")
@@ -203,6 +226,10 @@ class MainWindow(QMainWindow):
         rec_layout.addLayout(btn_row)
         root.addWidget(rec_group)
 
+        # ── Transcript panel ──
+        self._transcript_panel = TranscriptPanel()
+        root.addWidget(self._transcript_panel)
+
         # ── Last saved info ──
         self._saved_label = QLabel("")
         self._saved_label.setObjectName("savedLabel")
@@ -217,6 +244,14 @@ class MainWindow(QMainWindow):
         self._sys_bars.set_active(False)
         self._mic_bars._idle_timer.start()
         self._sys_bars._idle_timer.start()
+
+    # ── Settings ──────────────────────────────────────────────
+
+    def _open_settings(self) -> None:
+        dialog = SettingsDialog(self)
+        if dialog.exec() and self._transcription:
+            cfg = SettingsDialog.get_settings()
+            self._transcription.update_settings(cfg["asr_url"], cfg["asr_api_key"])
 
     # ── Recording control ───────────────────────────────────────
 
@@ -238,6 +273,15 @@ class MainWindow(QMainWindow):
             )
             return
 
+        # Start transcription pipeline
+        cfg = SettingsDialog.get_settings()
+        self._transcription = TranscriptionManager(cfg["asr_url"], cfg["asr_api_key"])
+        self._transcription.on_transcript = self._on_transcript_from_worker
+        self._transcription.on_error = self._on_transcription_error
+        self._audio.on_audio_chunk = self._transcription.feed_audio
+        self._transcription.start()
+        self._transcript_panel.clear()
+
         meeting_name = self._name_input.text().strip()
         self._audio.start_recording(
             mic_device=mic,
@@ -247,7 +291,15 @@ class MainWindow(QMainWindow):
         )
 
     def _stop_recording(self) -> None:
+        # Disconnect audio chunk callback before stopping
+        self._audio.on_audio_chunk = None
+
         saved_path = self._audio.stop_recording()
+
+        if self._transcription:
+            self._transcription.stop()
+            self._transcription = None
+
         if saved_path:
             self._saved_label.setText(f"Saved: {saved_path.name}")
         else:
@@ -269,6 +321,14 @@ class MainWindow(QMainWindow):
         self._state_signal.emit(state)
 
     def _on_audio_error(self, message: str) -> None:
+        self._error_signal.emit(message)
+
+    # ── Transcription callbacks (called from worker thread) ─────
+
+    def _on_transcript_from_worker(self, text: str, timestamp: str) -> None:
+        self._transcript_signal.emit(text, timestamp)
+
+    def _on_transcription_error(self, message: str) -> None:
         self._error_signal.emit(message)
 
     # ── UI updates (main thread) ────────────────────────────────
@@ -321,6 +381,10 @@ class MainWindow(QMainWindow):
         self._record_btn.style().unpolish(self._record_btn)
         self._record_btn.style().polish(self._record_btn)
 
+    @Slot(str, str)
+    def _on_transcript_received(self, text: str, timestamp: str) -> None:
+        self._transcript_panel.add_segment(text, timestamp)
+
     @Slot(str)
     def _show_error(self, message: str) -> None:
         QMessageBox.critical(self, "Audio Error", message)
@@ -346,6 +410,10 @@ class MainWindow(QMainWindow):
                 return
             if reply == QMessageBox.StandardButton.Yes:
                 self._stop_recording()
+
+        if self._transcription:
+            self._transcription.stop()
+            self._transcription = None
 
         self._mic_bars.stop()
         self._sys_bars.stop()

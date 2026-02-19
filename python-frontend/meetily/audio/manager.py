@@ -152,6 +152,7 @@ class AudioManager:
         self.on_levels_updated: Callable[[AudioLevels], None] | None = None
         self.on_state_changed: Callable[[RecordingState], None] | None = None
         self.on_error: Callable[[str], None] | None = None
+        self.on_audio_chunk: Callable[[np.ndarray], None] | None = None
 
     @property
     def state(self) -> RecordingState:
@@ -472,6 +473,9 @@ class AudioManager:
         with self._lock:
             self._mic_chunks.append(audio)
 
+        if self.on_audio_chunk:
+            self.on_audio_chunk(audio)
+
         # Update levels (fast path, no lock needed for atomic float writes)
         rms = float(np.sqrt(np.mean(audio**2)))
         peak = float(np.max(np.abs(audio)))
@@ -498,6 +502,9 @@ class AudioManager:
         with self._lock:
             self._sys_chunks.append(audio)
 
+        if self.on_audio_chunk:
+            self.on_audio_chunk(audio)
+
         rms = float(np.sqrt(np.mean(audio**2)))
         peak = float(np.max(np.abs(audio)))
         self._levels.system_rms = self._levels.system_rms * LEVEL_SMOOTHING + rms * (1 - LEVEL_SMOOTHING)
@@ -511,8 +518,13 @@ class AudioManager:
         if self._state != RecordingState.RECORDING:
             return
 
+        audio_copy = audio.copy()
+
         with self._lock:
-            self._sys_chunks.append(audio.copy())
+            self._sys_chunks.append(audio_copy)
+
+        if self.on_audio_chunk:
+            self.on_audio_chunk(audio_copy)
 
         rms = float(np.sqrt(np.mean(audio**2)))
         peak = float(np.max(np.abs(audio)))
