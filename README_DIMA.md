@@ -22,6 +22,7 @@
    ```bash
    git clone https://github.com/grk717/meeting-minutes
    cd meeting-minutes/frontend
+   git checkout /enhance/custom-asr-endpoint
    ```
   
 
