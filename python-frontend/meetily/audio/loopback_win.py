@@ -109,8 +109,37 @@ def get_default_output_device() -> OutputDevice | None:
     return devices[0] if devices else None
 
 
+def _find_loopback_device(pa, output_device_index: int) -> dict | None:
+    """Find the corresponding loopback input device for an output device.
+
+    PyAudioWPatch exposes loopback devices as special input devices
+    whose name contains '[Loopback]'. This function finds the loopback
+    counterpart of a given output device.
+    """
+    output_info = pa.get_device_info_by_index(output_device_index)
+    output_name = output_info["name"]
+
+    # Search for a loopback device matching this output
+    for i in range(pa.get_device_count()):
+        try:
+            dev_info = pa.get_device_info_by_index(i)
+            if dev_info["maxInputChannels"] > 0 and "[Loopback]" in dev_info["name"]:
+                # Check if the loopback name contains the output device name
+                # PyAudioWPatch names loopback devices like "Speakers [Loopback]"
+                base_name = dev_info["name"].replace(" [Loopback]", "")
+                if base_name == output_name or output_name.startswith(base_name):
+                    return dev_info
+        except Exception:
+            continue
+
+    return None
+
+
 class LoopbackStream:
     """Captures audio from a Windows output device via WASAPI loopback.
+
+    Uses a polling thread instead of a callback to avoid PyAudio callback
+    issues with WASAPI loopback mode.
 
     Usage:
         stream = LoopbackStream(device_index=5, target_rate=16000)
@@ -132,52 +161,140 @@ class LoopbackStream:
         self._stream = None
         self._running = False
         self._target_rate = target_rate
+        self._thread: threading.Thread | None = None
 
-        # Resolve device
+        # Resolve output device
         if device_index is not None:
-            self._device_info = self._pa.get_device_info_by_index(device_index)
+            self._output_info = self._pa.get_device_info_by_index(device_index)
         else:
             dev = get_default_output_device()
             if dev is None:
                 raise RuntimeError("No output device found for loopback")
-            self._device_info = self._pa.get_device_info_by_index(dev.index)
+            self._output_info = self._pa.get_device_info_by_index(dev.index)
 
-        self._device_rate = int(self._device_info["defaultSampleRate"])
-        self._device_channels = self._device_info["maxOutputChannels"]
+        # Try to find the corresponding loopback input device
+        self._loopback_info = _find_loopback_device(self._pa, self._output_info["index"])
+
+        if self._loopback_info is not None:
+            # Use the dedicated loopback device (preferred)
+            self._capture_info = self._loopback_info
+            self._use_as_loopback_flag = False
+            log.info(
+                "Found loopback device: '%s' (%dHz, %dch)",
+                self._capture_info["name"],
+                int(self._capture_info["defaultSampleRate"]),
+                self._capture_info["maxInputChannels"],
+            )
+        else:
+            # Fall back to as_loopback flag on the output device itself
+            self._capture_info = self._output_info
+            self._use_as_loopback_flag = True
+            log.info(
+                "No dedicated loopback device found, using as_loopback flag on '%s'",
+                self._output_info["name"],
+            )
+
+        self._device_rate = int(self._capture_info["defaultSampleRate"])
+        self._device_channels = max(
+            self._capture_info.get("maxInputChannels", 0),
+            self._capture_info.get("maxOutputChannels", 0),
+        )
+        if self._device_channels == 0:
+            self._device_channels = 2  # Fallback to stereo
 
         # Callback for captured audio (mono float32 at target_rate)
         self.on_data: Callable[[np.ndarray], None] | None = None
 
         log.info(
-            "LoopbackStream configured: '%s' (%dHz, %dch → %dHz mono)",
-            self._device_info["name"],
+            "LoopbackStream configured: '%s' (%dHz, %dch -> %dHz mono)",
+            self._capture_info["name"],
             self._device_rate,
             self._device_channels,
             self._target_rate,
         )
 
     def start(self) -> None:
-        """Start capturing loopback audio."""
+        """Start capturing loopback audio via polling thread."""
         if self._running:
             return
 
-        self._stream = self._pa.open(
+        # Calculate frames per buffer (~50ms chunks)
+        frames_per_buffer = int(self._device_rate * 0.05)
+
+        open_kwargs = dict(
             format=_pyaudio.paFloat32,
             channels=self._device_channels,
             rate=self._device_rate,
             input=True,
-            input_device_index=self._device_info["index"],
-            frames_per_buffer=1024,
-            stream_callback=self._callback,
-            as_loopback=True,  # The key flag — WASAPI loopback mode
+            input_device_index=self._capture_info["index"],
+            frames_per_buffer=frames_per_buffer,
         )
-        self._stream.start_stream()
+
+        # Only use as_loopback if we don't have a dedicated loopback device
+        if self._use_as_loopback_flag:
+            open_kwargs["as_loopback"] = True
+
+        self._stream = self._pa.open(**open_kwargs)
         self._running = True
-        log.info("Loopback stream started")
+
+        # Use polling thread — more reliable than callbacks for WASAPI loopback
+        self._thread = threading.Thread(
+            target=self._read_loop,
+            name="loopback-reader",
+            daemon=True,
+        )
+        self._thread.start()
+        log.info("Loopback stream started (polling mode, %d frames/buffer)", frames_per_buffer)
+
+    def _read_loop(self) -> None:
+        """Polling loop that reads from the loopback stream."""
+        frames_per_read = int(self._device_rate * 0.05)  # 50ms chunks
+
+        while self._running and self._stream is not None:
+            try:
+                # Read raw bytes from stream
+                raw = self._stream.read(frames_per_read, exception_on_overflow=False)
+
+                # Convert bytes to float32 numpy
+                audio = np.frombuffer(raw, dtype=np.float32)
+
+                if len(audio) == 0:
+                    continue
+
+                # Downmix to mono if multi-channel
+                if self._device_channels > 1:
+                    try:
+                        audio = audio.reshape(-1, self._device_channels).mean(axis=1)
+                    except ValueError:
+                        # If reshape fails, just take every Nth sample
+                        audio = audio[::self._device_channels]
+
+                # Resample to target rate if needed
+                if self._device_rate != self._target_rate:
+                    ratio = self._target_rate / self._device_rate
+                    new_len = max(1, int(len(audio) * ratio))
+                    indices = np.linspace(0, len(audio) - 1, new_len)
+                    audio = np.interp(indices, np.arange(len(audio)), audio).astype(
+                        np.float32
+                    )
+
+                if self.on_data is not None:
+                    self.on_data(audio)
+
+            except OSError as e:
+                if self._running:
+                    log.warning("Loopback read error: %s", e)
+            except Exception as e:
+                if self._running:
+                    log.error("Loopback read error: %s", e)
+                break
 
     def stop(self) -> None:
         """Stop capturing."""
         self._running = False
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
+            self._thread = None
         if self._stream is not None:
             try:
                 self._stream.stop_stream()
@@ -192,24 +309,3 @@ class LoopbackStream:
         if self._pa is not None:
             self._pa.terminate()
             self._pa = None
-
-    def _callback(self, in_data, frame_count, time_info, status) -> tuple:
-        if not self._running or self.on_data is None:
-            return (None, _pyaudio.paContinue)
-
-        # Convert bytes to float32 numpy array
-        audio = np.frombuffer(in_data, dtype=np.float32)
-
-        # Downmix to mono if multi-channel
-        if self._device_channels > 1:
-            audio = audio.reshape(-1, self._device_channels).mean(axis=1)
-
-        # Resample if needed (simple linear interpolation)
-        if self._device_rate != self._target_rate:
-            ratio = self._target_rate / self._device_rate
-            new_len = int(len(audio) * ratio)
-            indices = np.linspace(0, len(audio) - 1, new_len)
-            audio = np.interp(indices, np.arange(len(audio)), audio).astype(np.float32)
-
-        self.on_data(audio)
-        return (None, _pyaudio.paContinue)
