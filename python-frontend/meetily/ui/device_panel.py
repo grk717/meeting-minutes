@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import platform
+
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -14,24 +16,30 @@ from PySide6.QtWidgets import (
 )
 
 from meetily.audio.manager import AudioDevice, AudioManager
+from meetily.audio import loopback_win
 
 
 class DevicePanel(QWidget):
     """Panel with dropdowns for selecting mic and system audio devices.
 
-    System audio has an "Auto-detect" option that picks the best loopback
-    device automatically, so users don't have to guess.
+    On Windows, system audio uses WASAPI loopback (PyAudioWPatch) to capture
+    directly from speakers — no virtual audio driver needed. The dropdown
+    shows output devices (speakers/headphones) instead of input devices.
+
+    On macOS/Linux, falls back to virtual input devices (BlackHole, monitors).
     """
 
-    mic_changed = Signal(object)  # AudioDevice or None
-    system_changed = Signal(object)  # AudioDevice or None
+    mic_changed = Signal(object)
+    system_changed = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
         self._mic_devices: list[AudioDevice] = []
-        self._sys_devices: list[AudioDevice] = []
-        self._auto_detected_device: AudioDevice | None = None
+        self._auto_detected_device = None  # AudioDevice or loopback_win.OutputDevice
+        self._auto_use_loopback = False
+        # Manual override devices (OutputDevice on Windows, AudioDevice elsewhere)
+        self._manual_devices: list = []
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -69,13 +77,13 @@ class DevicePanel(QWidget):
         sys_detail_layout.setContentsMargins(120, 0, 0, 0)
         sys_detail_layout.setSpacing(6)
 
-        # Status label (shows auto-detected device or help)
+        # Status label
         self._sys_status = QLabel("")
         self._sys_status.setObjectName("statusLabel")
         self._sys_status.setWordWrap(True)
         sys_detail_layout.addWidget(self._sys_status)
 
-        # Manual override combo (hidden by default)
+        # Manual override combo
         manual_row = QHBoxLayout()
         self._sys_manual_check = QCheckBox("Manual:")
         self._sys_manual_check.setChecked(False)
@@ -83,7 +91,6 @@ class DevicePanel(QWidget):
         self._sys_combo = QComboBox()
         self._sys_combo.setMinimumWidth(200)
         self._sys_combo.setEnabled(False)
-        self._sys_combo.currentIndexChanged.connect(self._on_sys_changed)
         manual_row.addWidget(self._sys_manual_check)
         manual_row.addWidget(self._sys_combo, 1)
         sys_detail_layout.addLayout(manual_row)
@@ -115,9 +122,7 @@ class DevicePanel(QWidget):
         # Separate real mics from loopback devices
         self._mic_devices = [d for d in all_input if not d.is_loopback]
         if not self._mic_devices:
-            # Fallback: show all inputs if no non-loopback found
             self._mic_devices = all_input
-        self._sys_devices = all_input
 
         # ── Mic dropdown ──
         self._mic_combo.addItem("None (no microphone)", None)
@@ -125,7 +130,7 @@ class DevicePanel(QWidget):
         default_mic_idx = 0
 
         for i, dev in enumerate(self._mic_devices):
-            label = f"{dev.name}"
+            label = dev.name
             if dev.is_loopback:
                 label += "  [loopback]"
             self._mic_combo.addItem(label, dev.index)
@@ -134,17 +139,31 @@ class DevicePanel(QWidget):
 
         self._mic_combo.setCurrentIndex(default_mic_idx)
 
-        # ── System audio dropdown (for manual override) ──
+        # ── System audio dropdown (manual override) ──
         self._sys_combo.addItem("(select device)", None)
-        for dev in self._sys_devices:
-            label = f"{dev.name}"
-            if dev.is_loopback:
-                label += "  [loopback]"
-            label += f"  ({dev.hostapi_name})"
-            self._sys_combo.addItem(label, dev.index)
+        self._manual_devices = []
+
+        if platform.system() == "Windows" and loopback_win.is_available():
+            # Windows: show OUTPUT devices (speakers) for loopback capture
+            outputs = loopback_win.list_output_devices()
+            for dev in outputs:
+                label = dev.name
+                if dev.is_default:
+                    label += "  [Default]"
+                self._sys_combo.addItem(label, dev.index)
+                self._manual_devices.append(dev)
+        else:
+            # macOS/Linux: show input devices that could be loopback
+            for dev in all_input:
+                label = dev.name
+                if dev.is_loopback:
+                    label += "  [loopback]"
+                label += f"  ({dev.hostapi_name})"
+                self._sys_combo.addItem(label, dev.index)
+                self._manual_devices.append(dev)
 
         # ── Auto-detect ──
-        self._auto_detected_device = AudioManager.auto_detect_system_device()
+        self._auto_detected_device, self._auto_use_loopback = AudioManager.auto_detect_system_device()
         self._update_sys_status()
 
         self._mic_combo.blockSignals(False)
@@ -156,6 +175,7 @@ class DevicePanel(QWidget):
 
     @property
     def selected_system_device(self) -> int | None:
+        """Get selected system audio device index, or None if disabled."""
         if not self._sys_toggle.isChecked():
             return None
         if self._sys_manual_check.isChecked():
@@ -163,6 +183,16 @@ class DevicePanel(QWidget):
         if self._auto_detected_device is not None:
             return self._auto_detected_device.index
         return None
+
+    @property
+    def use_loopback(self) -> bool:
+        """Whether to use WASAPI loopback mode for system audio."""
+        if not self._sys_toggle.isChecked():
+            return False
+        if self._sys_manual_check.isChecked():
+            # Manual mode on Windows with loopback devices = loopback
+            return platform.system() == "Windows" and loopback_win.is_available()
+        return self._auto_use_loopback
 
     # ── Signal handlers ──
 
@@ -179,20 +209,24 @@ class DevicePanel(QWidget):
             return
 
         if self._sys_manual_check.isChecked():
-            self._sys_status.setText("Using manually selected device")
+            if platform.system() == "Windows" and loopback_win.is_available():
+                self._sys_status.setText("Select speakers/headphones to capture from")
+            else:
+                self._sys_status.setText("Select a virtual audio input device")
+            self._sys_status.setStyleSheet("color: #8888aa;")
             return
 
         if self._auto_detected_device:
-            self._sys_status.setText(
-                f"Auto-detected: {self._auto_detected_device.name} "
-                f"({self._auto_detected_device.hostapi_name})"
-            )
+            name = self._auto_detected_device.name
+            if self._auto_use_loopback:
+                self._sys_status.setText(f"Auto-detected speakers: {name}")
+            else:
+                self._sys_status.setText(f"Auto-detected: {name}")
             self._sys_status.setStyleSheet("color: #4cd964;")
         else:
             help_text = AudioManager.get_system_audio_help()
-            # Show just the first line in the label
             first_line = help_text.split("\n")[0]
-            self._sys_status.setText(f"No device found. {first_line}")
+            self._sys_status.setText(f"Not available. {first_line}")
             self._sys_status.setStyleSheet("color: #ff6b6b;")
 
     def _on_mic_changed(self, index: int) -> None:
@@ -204,9 +238,4 @@ class DevicePanel(QWidget):
         self.mic_changed.emit(dev)
 
     def _on_sys_changed(self, index: int) -> None:
-        device_index = self._sys_combo.currentData()
-        dev = None
-        if device_index is not None:
-            matching = [d for d in self._sys_devices if d.index == device_index]
-            dev = matching[0] if matching else None
-        self.system_changed.emit(dev)
+        pass  # Manual selection handled via properties

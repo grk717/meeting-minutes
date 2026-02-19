@@ -242,6 +242,7 @@ class MainWindow(QMainWindow):
         self._audio.start_recording(
             mic_device=mic,
             system_device=sys_dev,
+            use_loopback=self._device_panel.use_loopback,
             meeting_name=meeting_name,
         )
 

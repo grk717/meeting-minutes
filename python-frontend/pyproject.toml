@@ -8,6 +8,7 @@ dependencies = [
     "sounddevice>=0.4.6",
     "numpy>=1.24",
     "soundfile>=0.12",
+    "PyAudioWPatch>=0.2.12; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

@@ -19,6 +19,8 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
+from meetily.audio import loopback_win
+
 log = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16_000  # 16 kHz — standard for speech
@@ -132,6 +134,7 @@ class AudioManager:
         self._state = RecordingState.IDLE
         self._mic_stream: sd.InputStream | None = None
         self._sys_stream: sd.InputStream | None = None
+        self._loopback_stream: loopback_win.LoopbackStream | None = None
         self._mic_device: int | None = None
         self._sys_device: int | None = None
         self._save_path: Path | None = None
@@ -202,48 +205,40 @@ class AudioManager:
             return None
 
     @staticmethod
-    def auto_detect_system_device() -> AudioDevice | None:
+    def auto_detect_system_device() -> tuple[AudioDevice | loopback_win.OutputDevice | None, bool]:
         """Auto-detect the best system audio capture device.
 
-        Strategy by platform:
-        - Windows: Look for WASAPI loopback devices (output devices exposed
-          as loopback inputs). These are the default output speakers re-exposed
-          for capture — no extra software needed.
-        - macOS: Look for BlackHole or Soundflower virtual audio devices.
-          Returns None if not installed (user needs to install BlackHole).
-        - Linux: Look for PulseAudio monitor devices.
-
-        Returns the best candidate or None if no suitable device found.
+        Returns:
+            (device, use_loopback) tuple.
+            - On Windows: (OutputDevice, True) — uses WASAPI loopback on speakers.
+            - On macOS: (AudioDevice, False) — uses BlackHole/Soundflower input.
+            - On Linux: (AudioDevice, False) — uses PulseAudio monitor input.
+            - If nothing found: (None, False).
         """
-        all_devices = AudioManager.list_devices()
         system = platform.system()
 
+        # Windows: use PyAudioWPatch WASAPI loopback (captures from speakers directly)
+        if system == "Windows" and loopback_win.is_available():
+            dev = loopback_win.get_default_output_device()
+            if dev is not None:
+                log.info("Auto-detected Windows loopback device: '%s'", dev.name)
+                return dev, True
+            # Fallback: list all output devices
+            outputs = loopback_win.list_output_devices()
+            if outputs:
+                log.info("Auto-detected Windows loopback device (fallback): '%s'", outputs[0].name)
+                return outputs[0], True
+
+        # macOS / Linux: look for virtual input devices
+        all_devices = AudioManager.list_devices()
         candidates: list[AudioDevice] = []
 
-        if system == "Windows":
-            # On Windows, sounddevice via PortAudio can expose WASAPI loopback
-            # devices. These show up as input devices with "loopback" in the
-            # name under the WASAPI host API. We also look for the default
-            # output device's loopback counterpart.
-            for dev in all_devices:
-                if not dev.is_input:
-                    continue
-                if dev.loopback_priority > 0:
-                    candidates.append(dev)
-                    continue
-                # WASAPI: output devices with >0 input channels are loopback
-                hostapi_lower = dev.hostapi_name.lower()
-                if "wasapi" in hostapi_lower and dev.max_output_channels > 0:
-                    candidates.append(dev)
-
-        elif system == "Darwin":
-            # macOS: need BlackHole, Soundflower, or similar
+        if system == "Darwin":
             for dev in all_devices:
                 if dev.is_input and dev.loopback_priority > 0:
                     candidates.append(dev)
-
         else:
-            # Linux: look for PulseAudio/PipeWire monitor sources
+            # Linux: PulseAudio/PipeWire monitor sources
             for dev in all_devices:
                 if not dev.is_input:
                     continue
@@ -253,9 +248,8 @@ class AudioManager:
 
         if not candidates:
             log.info("No system audio capture device found automatically")
-            return None
+            return None, False
 
-        # Sort by priority (highest first)
         candidates.sort(key=lambda d: d.loopback_priority, reverse=True)
         best = candidates[0]
         log.info(
@@ -264,7 +258,7 @@ class AudioManager:
             best.loopback_priority,
             best.hostapi_name,
         )
-        return best
+        return best, False
 
     @staticmethod
     def get_system_audio_help() -> str:
@@ -280,10 +274,16 @@ class AudioManager:
                 "while capturing it."
             )
         elif system == "Windows":
+            if loopback_win.is_available():
+                return (
+                    "System audio capture uses WASAPI loopback.\n"
+                    "Your default speakers will be captured automatically."
+                )
             return (
-                "Windows should automatically detect your speakers as a loopback device.\n\n"
-                "If not listed, ensure your audio driver supports WASAPI loopback, "
-                "or enable 'Stereo Mix' in Sound Settings > Recording Devices."
+                "Install PyAudioWPatch for system audio capture:\n"
+                "  pip install PyAudioWPatch\n\n"
+                "This captures audio directly from your speakers — "
+                "no virtual audio driver needed."
             )
         else:
             return (
@@ -298,10 +298,24 @@ class AudioManager:
         self,
         mic_device: int | None = None,
         system_device: int | None = None,
+        use_loopback: bool = False,
         meeting_name: str = "",
         save_dir: Path | None = None,
     ) -> None:
-        """Start capturing audio from microphone and optionally system audio."""
+        """Start capturing audio from microphone and optionally system audio.
+
+        Args:
+            mic_device: sounddevice input device index for microphone.
+            system_device: Device index for system audio capture.
+                On Windows with use_loopback=True, this is a PyAudioWPatch
+                output device index (speakers). Otherwise it's a sounddevice
+                input device index (loopback/virtual device).
+            use_loopback: If True and on Windows, use WASAPI loopback mode
+                to capture from an output device. This is the recommended
+                approach on Windows — no virtual audio driver needed.
+            meeting_name: Optional name for the meeting recording.
+            save_dir: Directory to save the WAV file.
+        """
         if self._state != RecordingState.IDLE:
             log.warning("Cannot start recording: state is %s", self._state)
             return
@@ -339,21 +353,36 @@ class AudioManager:
                 self._emit_error(f"Microphone error: {e}")
                 return
 
-        # Start system audio stream (if selected)
+        # Start system audio stream
         if system_device is not None:
-            try:
-                self._sys_stream = sd.InputStream(
-                    device=system_device,
-                    samplerate=SAMPLE_RATE,
-                    channels=CHANNELS,
-                    blocksize=BLOCK_SIZE,
-                    dtype="float32",
-                    callback=self._sys_callback,
-                )
-                self._sys_stream.start()
-                log.info("System audio stream started on device %d", system_device)
-            except Exception as e:
-                log.warning("Failed to start system audio: %s (continuing with mic only)", e)
+            if use_loopback and loopback_win.is_available():
+                # Windows WASAPI loopback: capture from output device
+                try:
+                    self._loopback_stream = loopback_win.LoopbackStream(
+                        device_index=system_device,
+                        target_rate=SAMPLE_RATE,
+                    )
+                    self._loopback_stream.on_data = self._loopback_data_callback
+                    self._loopback_stream.start()
+                    log.info("WASAPI loopback stream started on output device %d", system_device)
+                except Exception as e:
+                    log.warning("Failed to start WASAPI loopback: %s (continuing with mic only)", e)
+                    self._loopback_stream = None
+            else:
+                # Standard sounddevice input (virtual device / macOS BlackHole / Linux monitor)
+                try:
+                    self._sys_stream = sd.InputStream(
+                        device=system_device,
+                        samplerate=SAMPLE_RATE,
+                        channels=CHANNELS,
+                        blocksize=BLOCK_SIZE,
+                        dtype="float32",
+                        callback=self._sys_callback,
+                    )
+                    self._sys_stream.start()
+                    log.info("System audio stream started on device %d", system_device)
+                except Exception as e:
+                    log.warning("Failed to start system audio: %s (continuing with mic only)", e)
 
         self._set_state(RecordingState.RECORDING)
 
@@ -382,6 +411,13 @@ class AudioManager:
                 log.warning("Error stopping system stream: %s", e)
             self._sys_stream = None
 
+        if self._loopback_stream is not None:
+            try:
+                self._loopback_stream.close()
+            except Exception as e:
+                log.warning("Error stopping loopback stream: %s", e)
+            self._loopback_stream = None
+
         # Save audio
         saved_path = self._save_audio()
 
@@ -401,6 +437,8 @@ class AudioManager:
             self._mic_stream.stop()
         if self._sys_stream:
             self._sys_stream.stop()
+        if self._loopback_stream:
+            self._loopback_stream.stop()
         self._set_state(RecordingState.PAUSED)
 
     def resume_recording(self) -> None:
@@ -411,6 +449,8 @@ class AudioManager:
             self._mic_stream.start()
         if self._sys_stream:
             self._sys_stream.start()
+        if self._loopback_stream:
+            self._loopback_stream.start()
         self._set_state(RecordingState.RECORDING)
 
     # ── Audio callbacks (called from audio thread) ──────────────
@@ -457,6 +497,22 @@ class AudioManager:
 
         with self._lock:
             self._sys_chunks.append(audio)
+
+        rms = float(np.sqrt(np.mean(audio**2)))
+        peak = float(np.max(np.abs(audio)))
+        self._levels.system_rms = self._levels.system_rms * LEVEL_SMOOTHING + rms * (1 - LEVEL_SMOOTHING)
+        self._levels.system_peak = max(peak, self._levels.system_peak * 0.95)
+
+        if self.on_levels_updated:
+            self.on_levels_updated(self._levels)
+
+    def _loopback_data_callback(self, audio: np.ndarray) -> None:
+        """Called by LoopbackStream with mono float32 audio at target rate."""
+        if self._state != RecordingState.RECORDING:
+            return
+
+        with self._lock:
+            self._sys_chunks.append(audio.copy())
 
         rms = float(np.sqrt(np.mean(audio**2)))
         peak = float(np.max(np.abs(audio)))
