@@ -278,6 +278,17 @@ class LoopbackStream:
                         np.float32
                     )
 
+                # Boost loopback audio — WASAPI loopback often delivers
+                # very quiet signals (0.01-0.1 range). Normalize to use
+                # more of the dynamic range while preventing clipping.
+                peak = np.max(np.abs(audio))
+                if peak > 1e-6:  # Not silence
+                    # Target peak of ~0.8 to leave headroom
+                    # Use a capped gain to avoid amplifying noise
+                    gain = min(0.8 / peak, 10.0)
+                    if gain > 1.5:
+                        audio = audio * gain
+
                 if self.on_data is not None:
                     self.on_data(audio)
 

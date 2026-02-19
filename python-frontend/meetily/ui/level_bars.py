@@ -80,9 +80,9 @@ class LevelBarsWidget(QWidget):
         if not self._is_active:
             return
 
-        # Clamp and scale
-        rms = min(1.0, rms * 5.0)  # Amplify for visibility
-        peak = min(1.0, peak * 3.0)
+        # Amplify for visibility — audio RMS is typically 0.001-0.1
+        rms = min(1.0, rms * 8.0)
+        peak = min(1.0, peak * 5.0)
 
         # Create 3 bar values with slight variation for visual interest
         self._target_values = [

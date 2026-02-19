@@ -547,13 +547,15 @@ class AudioManager:
             if len(sys_audio) < max_len:
                 sys_audio = np.pad(sys_audio, (0, max_len - len(sys_audio)))
 
-            # Simple mix with ducking: mic takes priority
-            mixed = mic_audio * 0.7 + sys_audio * 0.3
+            # Mix both streams with equal weight — both are important
+            # for meeting recordings (mic = your voice, system = remote participants)
+            mixed = mic_audio * 0.5 + sys_audio * 0.5
 
-            # Prevent clipping
+            # Normalize to use full dynamic range
             max_val = np.max(np.abs(mixed))
-            if max_val > 1.0:
-                mixed = mixed / max_val
+            if max_val > 0.001:
+                # Normalize to 0.9 peak to prevent clipping
+                mixed = mixed * (0.9 / max_val)
             audio = mixed
         elif len(mic_audio) > 0:
             audio = mic_audio
