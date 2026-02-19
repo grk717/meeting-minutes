@@ -37,6 +37,7 @@ class TranscriptPanel(QGroupBox):
         layout.addWidget(self._scroll)
 
         self._segments: list[str] = []
+        self._raw_segments: list[tuple[str, str]] = []  # (timestamp, text)
 
         # Placeholder
         self._placeholder = QLabel("Transcripts will appear here during recording...")
@@ -52,6 +53,7 @@ class TranscriptPanel(QGroupBox):
 
         formatted = f"[{timestamp}]  {text}"
         self._segments.append(formatted)
+        self._raw_segments.append((timestamp, text))
 
         label = QLabel(formatted)
         label.setWordWrap(True)
@@ -75,6 +77,7 @@ class TranscriptPanel(QGroupBox):
                 item.widget().deleteLater()
 
         self._segments.clear()
+        self._raw_segments.clear()
 
         # Re-add placeholder
         self._placeholder = QLabel("Transcripts will appear here during recording...")
@@ -85,3 +88,7 @@ class TranscriptPanel(QGroupBox):
     def get_full_transcript(self) -> str:
         """Return all segments joined as plain text."""
         return "\n".join(self._segments)
+
+    def get_raw_segments(self) -> list[tuple[str, str]]:
+        """Return (timestamp, text) pairs for log formatting."""
+        return list(self._raw_segments)

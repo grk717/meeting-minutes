@@ -37,13 +37,17 @@ python-frontend/
     │   ├── vad.py                     # Voice Activity Detection (~130 lines)
     │   ├── client.py                  # HTTP ASR client (~70 lines)
     │   └── manager.py                 # VAD→queue→worker orchestration (~110 lines)
+    ├── summarization/
+    │   ├── __init__.py                # Exports SummarizationClient
+    │   └── client.py                  # HTTP LLM client (~75 lines)
     ├── ui/
     │   ├── __init__.py                # Exports MainWindow
-    │   ├── main_window.py             # Main window with all controls (~310 lines)
+    │   ├── main_window.py             # Main window with all controls (~360 lines)
     │   ├── level_bars.py              # Animated 3-bar audio visualizer (~150 lines)
     │   ├── device_panel.py            # Mic + system audio device selectors (~210 lines)
-    │   ├── transcript_panel.py        # Live transcript display (~80 lines)
-    │   ├── settings_dialog.py         # ASR endpoint settings (~80 lines)
+    │   ├── transcript_panel.py        # Live transcript display (~95 lines)
+    │   ├── summary_panel.py           # LLM summary display (~65 lines)
+    │   ├── settings_dialog.py         # ASR + LLM endpoint settings (~105 lines)
     │   └── theme.py                   # Dark theme QSS stylesheet (~245 lines)
     ├── storage/
     │   └── __init__.py                # Placeholder for Phase 5
@@ -168,14 +172,40 @@ python-frontend/
 - On recording stop: flushes remaining speech, stops worker
 - Transcript panel sits below Recording group
 
-### Phase 4: Summarization — TODO
+### Phase 4: Summarization + Transcript Saving — DONE
 
-- Post-recording: send transcript to Claude/OpenAI API
-- Configurable system prompt / summary template
-- Display summary in rich text panel
-- New files needed:
-  - `meetily/summarization/claude_client.py`
-  - `meetily/ui/summary_panel.py`
+**What's implemented:**
+
+#### Transcript Log Saving
+- On recording stop, transcript saved as `.txt` next to the `.wav` file
+- Format: `Meeting: {name}\nDate: {datetime}\n\n[00:05] segment text...`
+- Same filename as WAV but with `.txt` extension
+
+#### `meetily/summarization/client.py` — SummarizationClient
+- HTTP client for OpenAI-compatible chat completions (`POST /v1/chat/completions`)
+- System prompt structures output as: Key Topics, Decisions Made, Action Items
+- 60s timeout for long transcripts
+- Supports configurable model name and optional API key
+
+#### `meetily/ui/summary_panel.py` — SummaryPanel
+- `QGroupBox` with scrollable `QLabel` displaying summary text
+- `set_loading()` — shows "Generating summary..." during LLM call
+- `set_summary(text)` — displays the result
+- Text-selectable for copy
+
+#### `meetily/ui/settings_dialog.py` — Updated
+- Added LLM section: Endpoint URL, API Key, Model name
+- Defaults: `http://localhost:11434`, model `gpt-4o-mini`
+- All settings persisted via `QSettings`
+
+#### Integration in `main_window.py`
+- On recording stop:
+  1. Saves transcript `.txt` next to WAV
+  2. Starts summarization in background thread
+  3. Summary panel shows loading → result
+  4. Summary saved as `{name}_summary.txt` next to WAV
+- Summary panel sits below Transcript panel
+- `_summary_signal` bridges worker thread → main thread
 
 ### Phase 5: Meeting Management — TODO
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QThread, QObject
@@ -22,10 +24,12 @@ from PySide6.QtWidgets import (
 )
 
 from meetily.audio.manager import AudioLevels, AudioManager, RecordingState
+from meetily.summarization import SummarizationClient
 from meetily.transcription import TranscriptionManager
 from meetily.ui.device_panel import DevicePanel
 from meetily.ui.level_bars import LevelBarsWidget
 from meetily.ui.settings_dialog import SettingsDialog
+from meetily.ui.summary_panel import SummaryPanel
 from meetily.ui.transcript_panel import TranscriptPanel
 
 log = logging.getLogger(__name__)
@@ -69,12 +73,13 @@ class MainWindow(QMainWindow):
     _state_signal = Signal(RecordingState)
     _error_signal = Signal(str)
     _transcript_signal = Signal(str, str)  # (text, timestamp)
+    _summary_signal = Signal(str)  # summary text
 
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Meetily")
         self.setMinimumSize(520, 580)
-        self.resize(560, 780)
+        self.resize(560, 850)
 
         # Audio manager
         self._audio = AudioManager()
@@ -90,6 +95,7 @@ class MainWindow(QMainWindow):
         self._state_signal.connect(self._update_state_ui)
         self._error_signal.connect(self._show_error)
         self._transcript_signal.connect(self._on_transcript_received)
+        self._summary_signal.connect(self._on_summary_received)
 
         # Duration timer
         self._duration_timer = QTimer(self)
@@ -230,6 +236,10 @@ class MainWindow(QMainWindow):
         self._transcript_panel = TranscriptPanel()
         root.addWidget(self._transcript_panel)
 
+        # ── Summary panel ──
+        self._summary_panel = SummaryPanel()
+        root.addWidget(self._summary_panel)
+
         # ── Last saved info ──
         self._saved_label = QLabel("")
         self._saved_label.setObjectName("savedLabel")
@@ -281,6 +291,7 @@ class MainWindow(QMainWindow):
         self._audio.on_audio_chunk = self._transcription.feed_audio
         self._transcription.start()
         self._transcript_panel.clear()
+        self._summary_panel.clear()
 
         meeting_name = self._name_input.text().strip()
         self._audio.start_recording(
@@ -300,6 +311,12 @@ class MainWindow(QMainWindow):
             self._transcription.stop()
             self._transcription = None
 
+        # Save transcript log and trigger summarization
+        transcript = self._transcript_panel.get_full_transcript()
+        if saved_path and transcript:
+            self._save_transcript_log(saved_path, transcript)
+            self._start_summarization(saved_path, transcript)
+
         if saved_path:
             self._saved_label.setText(f"Saved: {saved_path.name}")
         else:
@@ -310,6 +327,52 @@ class MainWindow(QMainWindow):
             self._audio.pause_recording()
         elif self._audio.state == RecordingState.PAUSED:
             self._audio.resume_recording()
+
+    # ── Transcript saving ─────────────────────────────────────
+
+    def _save_transcript_log(self, wav_path: Path, transcript: str) -> None:
+        """Save transcript as .txt next to the WAV file."""
+        txt_path = wav_path.with_suffix(".txt")
+        meeting_name = self._name_input.text().strip() or "Untitled Meeting"
+        date_str = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        segments = self._transcript_panel.get_raw_segments()
+        lines = [f"Meeting: {meeting_name}", f"Date: {date_str}", ""]
+        for ts, text in segments:
+            lines.append(f"[{ts}]  {text}")
+
+        txt_path.write_text("\n".join(lines), encoding="utf-8")
+        log.info("Transcript saved: %s", txt_path)
+
+    # ── Summarization ─────────────────────────────────────────
+
+    def _start_summarization(self, wav_path: Path, transcript: str) -> None:
+        """Run summarization in a background thread."""
+        cfg = SettingsDialog.get_settings()
+        if not cfg["llm_url"]:
+            return
+
+        self._summary_panel.set_loading()
+
+        client = SummarizationClient(cfg["llm_url"], cfg["llm_api_key"], cfg["llm_model"])
+        summary_path = wav_path.with_name(wav_path.stem + "_summary.txt")
+        meeting_name = self._name_input.text().strip() or "Untitled Meeting"
+
+        def worker() -> None:
+            try:
+                summary = client.summarize(transcript)
+                # Save summary file
+                date_str = time.strftime("%Y-%m-%d %H:%M:%S")
+                content = f"Meeting: {meeting_name}\nDate: {date_str}\n\n{summary}"
+                summary_path.write_text(content, encoding="utf-8")
+                log.info("Summary saved: %s", summary_path)
+                self._summary_signal.emit(summary)
+            except Exception as e:
+                log.error("Summarization failed: %s", e)
+                self._summary_signal.emit(f"Summarization failed: {e}")
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
 
     # ── Audio callbacks (called from audio thread) ──────────────
 
@@ -384,6 +447,10 @@ class MainWindow(QMainWindow):
     @Slot(str, str)
     def _on_transcript_received(self, text: str, timestamp: str) -> None:
         self._transcript_panel.add_segment(text, timestamp)
+
+    @Slot(str)
+    def _on_summary_received(self, summary: str) -> None:
+        self._summary_panel.set_summary(summary)
 
     @Slot(str)
     def _show_error(self, message: str) -> None:
