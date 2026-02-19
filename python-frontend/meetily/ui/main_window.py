@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QSizePolicy,
     QFrame,
+    QSplitter,
 )
 
 from meetily.audio.manager import AudioLevels, AudioManager, RecordingState
@@ -78,8 +79,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Meetily")
-        self.setMinimumSize(520, 580)
-        self.resize(560, 850)
+        self.setMinimumSize(900, 600)
+        self.resize(1200, 700)
 
         # Audio manager
         self._audio = AudioManager()
@@ -89,6 +90,9 @@ class MainWindow(QMainWindow):
 
         # Transcription manager (created on recording start)
         self._transcription: TranscriptionManager | None = None
+
+        # Track last saved WAV path for summarization
+        self._last_saved_path: Path | None = None
 
         # Connect internal signals (thread-safe bridge)
         self._levels_signal.connect(self._update_levels_ui)
@@ -108,10 +112,10 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        root.setContentsMargins(28, 24, 28, 24)
-        root.setSpacing(20)
+        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(12)
 
-        # ── Header ──
+        # ── Header row ──
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
 
@@ -137,37 +141,42 @@ class MainWindow(QMainWindow):
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(subtitle)
 
-        root.addSpacing(4)
+        # ── Three-column horizontal layout ──
+        columns = QHBoxLayout()
+        columns.setSpacing(12)
 
-        # ── Meeting name ──
+        # ── Column 1: Recording ──
+        rec_column = QVBoxLayout()
+        rec_column.setSpacing(12)
+
+        # Meeting name
         name_group = QGroupBox("Meeting")
         name_layout = QHBoxLayout(name_group)
         name_label = QLabel("Name")
         name_label.setFixedWidth(50)
         self._name_input = QLineEdit()
-        self._name_input.setPlaceholderText("Team Standup, 1-on-1, Sprint Review...")
+        self._name_input.setPlaceholderText("Team Standup, 1-on-1...")
         name_layout.addWidget(name_label)
         name_layout.addWidget(self._name_input, 1)
-        root.addWidget(name_group)
+        rec_column.addWidget(name_group)
 
-        # ── Device selection ──
+        # Device selection
         device_group = QGroupBox("Audio Devices")
         device_layout = QVBoxLayout(device_group)
         self._device_panel = DevicePanel()
         device_layout.addWidget(self._device_panel)
-        root.addWidget(device_group)
+        rec_column.addWidget(device_group)
 
-        # ── Recording section ──
+        # Recording controls
         rec_group = QGroupBox("Recording")
         rec_layout = QVBoxLayout(rec_group)
-        rec_layout.setSpacing(16)
+        rec_layout.setSpacing(12)
 
         # Level bars
         bars_container = QWidget()
         bars_layout = QHBoxLayout(bars_container)
         bars_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Mic levels
         mic_col = QVBoxLayout()
         self._mic_bars = LevelBarsWidget()
         self._mic_bars.setFixedSize(60, 80)
@@ -177,7 +186,6 @@ class MainWindow(QMainWindow):
         mic_col.addWidget(self._mic_bars, 0, Qt.AlignmentFlag.AlignCenter)
         mic_col.addWidget(mic_label)
 
-        # System levels
         sys_col = QVBoxLayout()
         self._sys_bars = LevelBarsWidget()
         self._sys_bars.setFixedSize(60, 80)
@@ -189,25 +197,25 @@ class MainWindow(QMainWindow):
 
         bars_layout.addStretch()
         bars_layout.addLayout(mic_col)
-        bars_layout.addSpacing(32)
+        bars_layout.addSpacing(24)
         bars_layout.addLayout(sys_col)
         bars_layout.addStretch()
 
         rec_layout.addWidget(bars_container)
 
-        # Duration label
+        # Duration
         self._duration_label = QLabel("00:00")
         self._duration_label.setObjectName("durationLabel")
         self._duration_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         rec_layout.addWidget(self._duration_label)
 
-        # Status label
+        # Status
         self._status_label = QLabel("Ready to record")
         self._status_label.setObjectName("statusLabel")
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         rec_layout.addWidget(self._status_label)
 
-        # Buttons row
+        # Buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(12)
 
@@ -230,24 +238,34 @@ class MainWindow(QMainWindow):
         btn_row.addStretch()
 
         rec_layout.addLayout(btn_row)
-        root.addWidget(rec_group)
 
-        # ── Transcript panel ──
-        self._transcript_panel = TranscriptPanel()
-        root.addWidget(self._transcript_panel)
-
-        # ── Summary panel ──
-        self._summary_panel = SummaryPanel()
-        root.addWidget(self._summary_panel)
-
-        # ── Last saved info ──
+        # Saved label
         self._saved_label = QLabel("")
         self._saved_label.setObjectName("savedLabel")
         self._saved_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._saved_label.setWordWrap(True)
-        root.addWidget(self._saved_label)
+        rec_layout.addWidget(self._saved_label)
 
-        root.addStretch()
+        rec_column.addWidget(rec_group)
+        rec_column.addStretch()
+
+        # Wrap recording column in a widget for the splitter
+        rec_widget = QWidget()
+        rec_widget.setLayout(rec_column)
+
+        # ── Column 2: Transcript ──
+        self._transcript_panel = TranscriptPanel()
+
+        # ── Column 3: Summary ──
+        self._summary_panel = SummaryPanel()
+        self._summary_panel.generate_requested.connect(self._on_generate_summary)
+
+        # Add columns
+        columns.addWidget(rec_widget, 1)
+        columns.addWidget(self._transcript_panel, 1)
+        columns.addWidget(self._summary_panel, 1)
+
+        root.addLayout(columns, 1)
 
         # Start idle animation
         self._mic_bars.set_active(False)
@@ -292,6 +310,7 @@ class MainWindow(QMainWindow):
         self._transcription.start()
         self._transcript_panel.clear()
         self._summary_panel.clear()
+        self._last_saved_path = None
 
         meeting_name = self._name_input.text().strip()
         self._audio.start_recording(
@@ -311,14 +330,18 @@ class MainWindow(QMainWindow):
             self._transcription.stop()
             self._transcription = None
 
-        # Save transcript log and trigger summarization
+        # Save transcript log
         transcript = self._transcript_panel.get_full_transcript()
         if saved_path and transcript:
             self._save_transcript_log(saved_path, transcript)
-            self._start_summarization(saved_path, transcript)
+
+        self._last_saved_path = saved_path
 
         if saved_path:
             self._saved_label.setText(f"Saved: {saved_path.name}")
+            # Enable generate button if we have a transcript
+            if transcript:
+                self._summary_panel.set_generate_enabled(True)
         else:
             self._saved_label.setText("Recording discarded (too short or empty)")
 
@@ -346,26 +369,37 @@ class MainWindow(QMainWindow):
 
     # ── Summarization ─────────────────────────────────────────
 
-    def _start_summarization(self, wav_path: Path, transcript: str) -> None:
-        """Run summarization in a background thread."""
+    def _on_generate_summary(self) -> None:
+        """Called when user clicks Generate Summary button."""
+        transcript = self._transcript_panel.get_full_transcript()
+        if not transcript:
+            return
+
         cfg = SettingsDialog.get_settings()
         if not cfg["llm_url"]:
+            QMessageBox.warning(
+                self,
+                "LLM Not Configured",
+                "Please configure an LLM endpoint URL in Settings.",
+            )
             return
 
         self._summary_panel.set_loading()
 
         client = SummarizationClient(cfg["llm_url"], cfg["llm_api_key"], cfg["llm_model"])
-        summary_path = wav_path.with_name(wav_path.stem + "_summary.txt")
         meeting_name = self._name_input.text().strip() or "Untitled Meeting"
+        wav_path = self._last_saved_path
 
         def worker() -> None:
             try:
                 summary = client.summarize(transcript)
-                # Save summary file
-                date_str = time.strftime("%Y-%m-%d %H:%M:%S")
-                content = f"Meeting: {meeting_name}\nDate: {date_str}\n\n{summary}"
-                summary_path.write_text(content, encoding="utf-8")
-                log.info("Summary saved: %s", summary_path)
+                # Save summary file next to WAV if available
+                if wav_path:
+                    summary_path = wav_path.with_name(wav_path.stem + "_summary.txt")
+                    date_str = time.strftime("%Y-%m-%d %H:%M:%S")
+                    content = f"Meeting: {meeting_name}\nDate: {date_str}\n\n{summary}"
+                    summary_path.write_text(content, encoding="utf-8")
+                    log.info("Summary saved: %s", summary_path)
                 self._summary_signal.emit(summary)
             except Exception as e:
                 log.error("Summarization failed: %s", e)
@@ -377,7 +411,6 @@ class MainWindow(QMainWindow):
     # ── Audio callbacks (called from audio thread) ──────────────
 
     def _on_audio_levels(self, levels: AudioLevels) -> None:
-        # Bridge to main thread via signal
         self._levels_signal.emit(levels)
 
     def _on_audio_state(self, state: RecordingState) -> None:
