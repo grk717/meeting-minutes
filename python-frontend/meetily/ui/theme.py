@@ -138,6 +138,34 @@ QComboBox QAbstractItemView {
     padding: 4px;
 }
 
+/* ── Checkboxes ── */
+QCheckBox {
+    color: #c0c0e0;
+    spacing: 8px;
+    font-size: 13px;
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid #3a3a6a;
+    background-color: #0f1a30;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #4c6ef5;
+    border-color: #4c6ef5;
+}
+
+QCheckBox::indicator:hover {
+    border-color: #5c7cff;
+}
+
+QCheckBox:disabled {
+    color: #555577;
+}
+
 /* ── Buttons ── */
 QPushButton {
     border: none;
@@ -145,7 +173,6 @@ QPushButton {
     padding: 10px 28px;
     font-size: 14px;
     font-weight: 600;
-    cursor: pointer;
 }
 
 #recordBtn {

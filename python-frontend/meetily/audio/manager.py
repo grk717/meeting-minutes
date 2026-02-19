@@ -65,8 +65,47 @@ class AudioDevice:
             "stereo mix",
             "what u hear",
             "wave out",
+            "vb-audio",
+            "cable output",
+            "voicemeeter",
         ]
         return any(hint in name_lower for hint in loopback_hints)
+
+    @property
+    def loopback_priority(self) -> int:
+        """Higher = better candidate for system audio capture.
+
+        On Windows, WASAPI loopback devices are the best option.
+        On macOS, BlackHole is the standard virtual audio device.
+        """
+        name_lower = self.name.lower()
+        hostapi_lower = self.hostapi_name.lower()
+
+        # Windows WASAPI loopback — best option, works natively
+        if "wasapi" in hostapi_lower and "loopback" in name_lower:
+            return 100
+
+        # macOS: BlackHole is the standard
+        if "blackhole" in name_lower:
+            return 90
+
+        # Soundflower (legacy macOS)
+        if "soundflower" in name_lower:
+            return 80
+
+        # VB-Audio / VoiceMeeter (cross-platform)
+        if "cable output" in name_lower or "voicemeeter" in name_lower:
+            return 70
+
+        # Generic virtual/loopback
+        if "loopback" in name_lower:
+            return 60
+        if "virtual" in name_lower:
+            return 50
+        if "stereo mix" in name_lower:
+            return 40
+
+        return 0
 
     def __str__(self) -> str:
         return self.name
@@ -161,6 +200,97 @@ class AudioManager:
             return info["index"]
         except Exception:
             return None
+
+    @staticmethod
+    def auto_detect_system_device() -> AudioDevice | None:
+        """Auto-detect the best system audio capture device.
+
+        Strategy by platform:
+        - Windows: Look for WASAPI loopback devices (output devices exposed
+          as loopback inputs). These are the default output speakers re-exposed
+          for capture — no extra software needed.
+        - macOS: Look for BlackHole or Soundflower virtual audio devices.
+          Returns None if not installed (user needs to install BlackHole).
+        - Linux: Look for PulseAudio monitor devices.
+
+        Returns the best candidate or None if no suitable device found.
+        """
+        all_devices = AudioManager.list_devices()
+        system = platform.system()
+
+        candidates: list[AudioDevice] = []
+
+        if system == "Windows":
+            # On Windows, sounddevice via PortAudio can expose WASAPI loopback
+            # devices. These show up as input devices with "loopback" in the
+            # name under the WASAPI host API. We also look for the default
+            # output device's loopback counterpart.
+            for dev in all_devices:
+                if not dev.is_input:
+                    continue
+                if dev.loopback_priority > 0:
+                    candidates.append(dev)
+                    continue
+                # WASAPI: output devices with >0 input channels are loopback
+                hostapi_lower = dev.hostapi_name.lower()
+                if "wasapi" in hostapi_lower and dev.max_output_channels > 0:
+                    candidates.append(dev)
+
+        elif system == "Darwin":
+            # macOS: need BlackHole, Soundflower, or similar
+            for dev in all_devices:
+                if dev.is_input and dev.loopback_priority > 0:
+                    candidates.append(dev)
+
+        else:
+            # Linux: look for PulseAudio/PipeWire monitor sources
+            for dev in all_devices:
+                if not dev.is_input:
+                    continue
+                name_lower = dev.name.lower()
+                if "monitor" in name_lower or dev.loopback_priority > 0:
+                    candidates.append(dev)
+
+        if not candidates:
+            log.info("No system audio capture device found automatically")
+            return None
+
+        # Sort by priority (highest first)
+        candidates.sort(key=lambda d: d.loopback_priority, reverse=True)
+        best = candidates[0]
+        log.info(
+            "Auto-detected system audio device: '%s' (priority=%d, hostapi=%s)",
+            best.name,
+            best.loopback_priority,
+            best.hostapi_name,
+        )
+        return best
+
+    @staticmethod
+    def get_system_audio_help() -> str:
+        """Return platform-specific help text for system audio setup."""
+        system = platform.system()
+        if system == "Darwin":
+            return (
+                "macOS requires a virtual audio device to capture system audio.\n\n"
+                "Install BlackHole (free, open source):\n"
+                "  brew install blackhole-2ch\n\n"
+                "Then set BlackHole as your system output in System Settings > Sound, "
+                "or create a Multi-Output Device in Audio MIDI Setup to hear audio "
+                "while capturing it."
+            )
+        elif system == "Windows":
+            return (
+                "Windows should automatically detect your speakers as a loopback device.\n\n"
+                "If not listed, ensure your audio driver supports WASAPI loopback, "
+                "or enable 'Stereo Mix' in Sound Settings > Recording Devices."
+            )
+        else:
+            return (
+                "Linux: PulseAudio/PipeWire monitor sources should be auto-detected.\n\n"
+                "If not listed, check that your audio server exposes monitor sources:\n"
+                "  pactl list sources | grep monitor"
+            )
 
     # ── Recording control ───────────────────────────────────────
 
