@@ -563,10 +563,21 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_summary_received(self, summary: str) -> None:
         self._summary_panel.set_summary(summary)
-        if self._last_meeting_db_id:
+
+        # Determine which meeting to update
+        db_id = None
+        if self._current_detail_meeting and self._current_detail_meeting.id:
+            db_id = self._current_detail_meeting.id
+        elif self._last_meeting_db_id:
+            db_id = self._last_meeting_db_id
+
+        if db_id:
             try:
-                self._db.update_summary(self._last_meeting_db_id, summary)
+                self._db.update_summary(db_id, summary)
                 self._refresh_sidebar()
+                # Refresh the detail meeting object so export sees the summary
+                if self._current_detail_meeting and self._current_detail_meeting.id == db_id:
+                    self._current_detail_meeting = self._db.get_meeting(db_id)
             except Exception as e:
                 log.error("Failed to save summary to DB: %s", e)
 

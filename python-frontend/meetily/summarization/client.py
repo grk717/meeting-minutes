@@ -15,14 +15,23 @@ _TIMEOUT = 60  # seconds — summaries can be slow for long transcripts
 
 _SYSTEM_PROMPT = (
     "You are a meeting assistant. Summarize the following meeting transcript.\n\n"
-    "Structure your summary as:\n"
+    "Output valid Markdown with the following structure:\n\n"
+    "## Overview\n"
+    "A 1-2 sentence summary of what the meeting was about.\n\n"
     "## Key Topics Discussed\n"
-    "- ...\n\n"
+    "- Topic 1\n"
+    "- Topic 2\n\n"
     "## Decisions Made\n"
-    "- ...\n\n"
+    "- Decision 1\n"
+    "- Decision 2\n\n"
     "## Action Items\n"
-    "- ...\n\n"
-    "Be concise. Use bullet points. If a section has no items, write 'None.'"
+    "- [ ] Action item with owner if mentioned\n"
+    "- [ ] Another action item\n\n"
+    "Rules:\n"
+    "- Use proper Markdown formatting (headers, bullet points, checkboxes for action items)\n"
+    "- Be concise. Each bullet should be one clear sentence.\n"
+    "- If a section has no items, write 'None.'\n"
+    "- Do NOT wrap the output in a code fence. Output raw Markdown directly."
 )
 
 
