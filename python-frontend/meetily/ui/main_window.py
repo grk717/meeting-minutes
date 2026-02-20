@@ -625,6 +625,8 @@ class MainWindow(QMainWindow):
         self._summary_panel.clear()
         if meeting.summary_text:
             self._summary_panel.set_summary(meeting.summary_text)
+        elif meeting.transcript_text or meeting.transcript_segments:
+            self._summary_panel.set_generate_enabled(True)
 
     def _show_recording_view(self) -> None:
         self._current_detail_meeting = None
