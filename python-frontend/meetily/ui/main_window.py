@@ -409,11 +409,12 @@ class MainWindow(QMainWindow):
 
         if saved_path:
             self._saved_label.setText(f"Saved: {saved_path.name}")
-            # Enable generate button if we have a transcript
-            if transcript:
-                self._summary_panel.set_generate_enabled(True)
         else:
             self._saved_label.setText("Recording discarded (too short or empty)")
+
+        # Enable generate button whenever we have a transcript
+        if transcript:
+            self._summary_panel.set_generate_enabled(True)
 
     def _toggle_pause(self) -> None:
         if self._audio.state == RecordingState.RECORDING:
