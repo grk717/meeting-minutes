@@ -269,4 +269,100 @@ QMessageBox QPushButton {
 QMessageBox QPushButton:hover {
     background-color: #3a3a5a;
 }
+
+/* ── Sidebar ── */
+#sidebar {
+    background-color: #141428;
+    border-right: 1px solid #2a2a4a;
+}
+
+#sidebarHeader {
+    font-size: 14px;
+    font-weight: 600;
+    color: #a0a0c0;
+    background-color: #141428;
+    border-bottom: 1px solid #2a2a4a;
+    padding: 8px;
+}
+
+#sidebarSearch {
+    background-color: #0f1a30;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: #e0e0e0;
+    font-size: 12px;
+}
+
+#sidebarSearch:focus {
+    border-color: #4c6ef5;
+}
+
+#sidebarNewBtn {
+    background-color: #2a2a4a;
+    color: #c0c0e0;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 0;
+}
+
+#sidebarNewBtn:hover {
+    background-color: #3a3a5a;
+}
+
+#sidebarItemName {
+    font-size: 13px;
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
+#sidebarItemMeta {
+    font-size: 11px;
+    color: #666688;
+}
+
+#sidebarDeleteBtn {
+    background-color: transparent;
+    color: #ff6b6b;
+    border: none;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 0;
+    min-width: 0;
+}
+
+#sidebarDeleteBtn:hover {
+    color: #ff4444;
+}
+
+#sidebarScroll {
+    background-color: transparent;
+    border: none;
+}
+
+MeetingListItem[selected="true"] {
+    background-color: #1a2a4e;
+    border-radius: 6px;
+}
+
+MeetingListItem:hover {
+    background-color: #1a1a3e;
+    border-radius: 6px;
+}
+
+/* ── Meeting detail bar ── */
+#meetingDetailBar {
+    background-color: #16213e;
+    border-bottom: 1px solid #2a2a4a;
+    padding: 4px;
+}
+
+#meetingDetailTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
 """

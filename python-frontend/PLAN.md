@@ -48,9 +48,12 @@ python-frontend/
     │   ├── transcript_panel.py        # Live transcript display (~95 lines)
     │   ├── summary_panel.py           # LLM summary display (~65 lines)
     │   ├── settings_dialog.py         # ASR + LLM endpoint settings (~105 lines)
-    │   └── theme.py                   # Dark theme QSS stylesheet (~245 lines)
+    │   ├── sidebar.py                 # Meeting history sidebar (~165 lines)
+    │   ├── meeting_detail.py          # Detail bar with copy/export (~65 lines)
+    │   └── theme.py                   # Dark theme QSS stylesheet (~340 lines)
     ├── storage/
-    │   └── __init__.py                # Placeholder for Phase 5
+    │   ├── __init__.py                # Exports MeetingDatabase, Meeting
+    │   └── database.py                # SQLite storage (~130 lines)
     └── utils/
         └── __init__.py                # Placeholder
 ```
@@ -207,16 +210,38 @@ python-frontend/
 - Summary panel sits below Transcript panel
 - `_summary_signal` bridges worker thread → main thread
 
-### Phase 5: Meeting Management — TODO
+### Phase 5: Meeting Management — DONE
 
-- SQLite storage (meetings, transcripts, summaries)
-- Sidebar with meeting history list + search
-- Meeting detail view (transcript + summary)
-- Copy/export functionality
-- New files needed:
-  - `meetily/storage/database.py`
-  - `meetily/ui/sidebar.py`
-  - `meetily/ui/meeting_detail.py`
+**What's implemented:**
+
+#### `meetily/storage/database.py` — MeetingDatabase
+- `Meeting` dataclass: id, name, created_at, duration_secs, wav_path, transcript_text, transcript_segments (JSON), summary_text, updated_at
+- `MeetingDatabase` class: synchronous `sqlite3` with `journal_mode=WAL`
+- Single `meetings` table, DB stored at `~/Documents/Meetily/meetily.db`
+- Methods: `save_meeting()`, `update_summary()`, `get_meeting()`, `list_meetings()`, `search_meetings()`, `delete_meeting()`, `close()`
+- Dual storage: meetings saved to both DB and filesystem (WAV + .txt files)
+
+#### `meetily/ui/sidebar.py` — Sidebar + MeetingListItem
+- `MeetingListItem(QWidget)`: clickable meeting entry with name, date, duration; delete button on hover
+- `Sidebar(QWidget)`: fixed 240px, "Meetings" header, search field, "+ New Meeting" button, scrollable meeting list
+- Signals: `meeting_selected(int)`, `meeting_deleted(int)`, `new_meeting_requested()`, `search_changed(str)`
+- Search debounced (300ms timer in MainWindow) queries name + transcript text via `LIKE`
+
+#### `meetily/ui/meeting_detail.py` — MeetingDetailBar
+- Horizontal bar with "Back" button, meeting title/date, Copy/Export .txt/Export .md buttons
+- Shown when viewing a past meeting, hidden during recording
+
+#### Integration in `main_window.py`
+- Layout: `QSplitter` with sidebar on left, existing 3-column layout on right
+- On recording stop: meeting saved to DB, sidebar refreshed
+- On summary generation: DB updated with summary text
+- Sidebar click: hides recording column, populates transcript/summary panels from DB
+- "+ New Meeting" / "Back": returns to recording view
+- Delete: confirmation dialog, removes from DB, refreshes sidebar
+- Copy: copies transcript + summary to clipboard
+- Export .txt: plain text with meeting name, date, transcript, summary
+- Export .md: Markdown with headers, bulleted transcript segments, summary section
+- DB closed on app exit
 
 ### Phase 6: Settings & Polish — TODO
 

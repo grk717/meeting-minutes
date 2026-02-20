@@ -10,6 +10,8 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal, Slot, QThread, QObject
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -25,11 +27,14 @@ from PySide6.QtWidgets import (
 )
 
 from meetily.audio.manager import AudioLevels, AudioManager, RecordingState
+from meetily.storage.database import Meeting, MeetingDatabase
 from meetily.summarization import SummarizationClient
 from meetily.transcription import TranscriptionManager
 from meetily.ui.device_panel import DevicePanel
 from meetily.ui.level_bars import LevelBarsWidget
+from meetily.ui.meeting_detail import MeetingDetailBar
 from meetily.ui.settings_dialog import SettingsDialog
+from meetily.ui.sidebar import Sidebar
 from meetily.ui.summary_panel import SummaryPanel
 from meetily.ui.transcript_panel import TranscriptPanel
 
@@ -79,8 +84,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Meetily")
-        self.setMinimumSize(900, 600)
-        self.resize(1200, 700)
+        self.setMinimumSize(1100, 600)
+        self.resize(1400, 700)
 
         # Audio manager
         self._audio = AudioManager()
@@ -93,6 +98,17 @@ class MainWindow(QMainWindow):
 
         # Track last saved WAV path for summarization
         self._last_saved_path: Path | None = None
+
+        # Database
+        self._db = MeetingDatabase()
+        self._last_meeting_db_id: int | None = None
+        self._current_detail_meeting: Meeting | None = None
+
+        # Search debounce timer
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(300)
+        self._search_timer.timeout.connect(self._refresh_sidebar)
 
         # Connect internal signals (thread-safe bridge)
         self._levels_signal.connect(self._update_levels_ui)
@@ -140,6 +156,31 @@ class MainWindow(QMainWindow):
         subtitle.setObjectName("appSubtitle")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(subtitle)
+
+        # ── Sidebar ──
+        self._sidebar = Sidebar()
+        self._sidebar.meeting_selected.connect(self._show_meeting_detail)
+        self._sidebar.meeting_deleted.connect(self._on_meeting_deleted)
+        self._sidebar.new_meeting_requested.connect(self._show_recording_view)
+        self._sidebar.search_changed.connect(self._on_search_changed)
+
+        # ── Main splitter: sidebar | content ──
+        self._splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter.addWidget(self._sidebar)
+
+        right_pane = QWidget()
+        right_layout = QVBoxLayout(right_pane)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+
+        # ── Meeting detail bar (hidden by default) ──
+        self._detail_bar = MeetingDetailBar()
+        self._detail_bar.setVisible(False)
+        self._detail_bar.back_requested.connect(self._show_recording_view)
+        self._detail_bar.copy_requested.connect(self._on_copy_meeting)
+        self._detail_bar.export_txt_requested.connect(self._on_export_txt)
+        self._detail_bar.export_md_requested.connect(self._on_export_md)
+        right_layout.addWidget(self._detail_bar)
 
         # ── Three-column horizontal layout ──
         columns = QHBoxLayout()
@@ -250,8 +291,8 @@ class MainWindow(QMainWindow):
         rec_column.addStretch()
 
         # Wrap recording column in a widget for the splitter
-        rec_widget = QWidget()
-        rec_widget.setLayout(rec_column)
+        self._rec_widget = QWidget()
+        self._rec_widget.setLayout(rec_column)
 
         # ── Column 2: Transcript ──
         self._transcript_panel = TranscriptPanel()
@@ -261,11 +302,21 @@ class MainWindow(QMainWindow):
         self._summary_panel.generate_requested.connect(self._on_generate_summary)
 
         # Add columns
-        columns.addWidget(rec_widget, 1)
+        columns.addWidget(self._rec_widget, 1)
         columns.addWidget(self._transcript_panel, 1)
         columns.addWidget(self._summary_panel, 1)
 
-        root.addLayout(columns, 1)
+        columns_widget = QWidget()
+        columns_widget.setLayout(columns)
+        right_layout.addWidget(columns_widget, 1)
+
+        self._splitter.addWidget(right_pane)
+        self._splitter.setStretchFactor(0, 0)  # sidebar: fixed
+        self._splitter.setStretchFactor(1, 1)  # content: stretches
+        root.addWidget(self._splitter, 1)
+
+        # Load meeting history
+        self._refresh_sidebar()
 
         # Start idle animation
         self._mic_bars.set_active(False)
@@ -336,6 +387,25 @@ class MainWindow(QMainWindow):
             self._save_transcript_log(saved_path, transcript)
 
         self._last_saved_path = saved_path
+
+        # Save to database
+        self._last_meeting_db_id = None
+        if saved_path or transcript:
+            try:
+                meeting = Meeting(
+                    name=self._name_input.text().strip() or "Untitled Meeting",
+                    created_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    duration_secs=self._audio.get_recording_duration(),
+                    wav_path=str(saved_path) if saved_path else "",
+                    transcript_text=transcript,
+                    transcript_segments=list(
+                        self._transcript_panel.get_raw_segments()
+                    ),
+                )
+                self._last_meeting_db_id = self._db.save_meeting(meeting)
+                self._refresh_sidebar()
+            except Exception as e:
+                log.error("Failed to save meeting to DB: %s", e)
 
         if saved_path:
             self._saved_label.setText(f"Saved: {saved_path.name}")
@@ -484,6 +554,12 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_summary_received(self, summary: str) -> None:
         self._summary_panel.set_summary(summary)
+        if self._last_meeting_db_id:
+            try:
+                self._db.update_summary(self._last_meeting_db_id, summary)
+                self._refresh_sidebar()
+            except Exception as e:
+                log.error("Failed to save summary to DB: %s", e)
 
     @Slot(str)
     def _show_error(self, message: str) -> None:
@@ -494,6 +570,125 @@ class MainWindow(QMainWindow):
         mins = int(secs) // 60
         secs_remainder = int(secs) % 60
         self._duration_label.setText(f"{mins:02d}:{secs_remainder:02d}")
+
+    # ── Sidebar / meeting browsing ──────────────────────────────
+
+    def _refresh_sidebar(self) -> None:
+        query = self._sidebar.search_query
+        if query:
+            meetings = self._db.search_meetings(query)
+        else:
+            meetings = self._db.list_meetings()
+        self._sidebar.populate(meetings)
+
+    def _on_search_changed(self, text: str) -> None:
+        self._search_timer.start()  # debounce 300ms
+
+    def _show_meeting_detail(self, meeting_id: int) -> None:
+        if self._audio.state != RecordingState.IDLE:
+            QMessageBox.information(
+                self,
+                "Recording Active",
+                "Please stop the current recording before viewing past meetings.",
+            )
+            return
+
+        meeting = self._db.get_meeting(meeting_id)
+        if meeting is None:
+            return
+
+        self._current_detail_meeting = meeting
+        self._sidebar.set_selected(meeting_id)
+
+        # Switch to detail mode
+        self._rec_widget.setVisible(False)
+        self._detail_bar.setVisible(True)
+        self._detail_bar.set_meeting(meeting)
+
+        # Populate transcript panel
+        self._transcript_panel.clear()
+        for timestamp, text in meeting.transcript_segments:
+            self._transcript_panel.add_segment(text, timestamp)
+        if not meeting.transcript_segments and meeting.transcript_text:
+            self._transcript_panel.add_segment(meeting.transcript_text, "")
+
+        # Populate summary panel
+        self._summary_panel.clear()
+        if meeting.summary_text:
+            self._summary_panel.set_summary(meeting.summary_text)
+
+    def _show_recording_view(self) -> None:
+        self._current_detail_meeting = None
+        self._rec_widget.setVisible(True)
+        self._detail_bar.setVisible(False)
+        self._sidebar.set_selected(None)
+
+        if self._audio.state == RecordingState.IDLE:
+            self._transcript_panel.clear()
+            self._summary_panel.clear()
+
+    def _on_meeting_deleted(self, meeting_id: int) -> None:
+        reply = QMessageBox.question(
+            self,
+            "Delete Meeting",
+            "Are you sure you want to delete this meeting?\nThis cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        self._db.delete_meeting(meeting_id)
+
+        if (
+            self._current_detail_meeting
+            and self._current_detail_meeting.id == meeting_id
+        ):
+            self._show_recording_view()
+
+        self._refresh_sidebar()
+
+    # ── Copy / export ────────────────────────────────────────────
+
+    def _on_copy_meeting(self) -> None:
+        meeting = self._current_detail_meeting
+        if not meeting:
+            return
+        text = f"Meeting: {meeting.name}\nDate: {meeting.created_at}\n\n"
+        text += "TRANSCRIPT\n" + meeting.transcript_text + "\n"
+        if meeting.summary_text:
+            text += "\nSUMMARY\n" + meeting.summary_text
+        QApplication.clipboard().setText(text)
+
+    def _on_export_txt(self) -> None:
+        meeting = self._current_detail_meeting
+        if not meeting:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Meeting", f"{meeting.name}.txt", "Text Files (*.txt)"
+        )
+        if path:
+            content = f"Meeting: {meeting.name}\nDate: {meeting.created_at}\n\n"
+            content += meeting.transcript_text
+            if meeting.summary_text:
+                content += f"\n\nSummary:\n{meeting.summary_text}"
+            Path(path).write_text(content, encoding="utf-8")
+
+    def _on_export_md(self) -> None:
+        meeting = self._current_detail_meeting
+        if not meeting:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Meeting", f"{meeting.name}.md", "Markdown Files (*.md)"
+        )
+        if path:
+            content = f"# {meeting.name}\n\n"
+            content += f"**Date:** {meeting.created_at}\n\n"
+            content += "## Transcript\n\n"
+            for ts, text in meeting.transcript_segments:
+                content += f"- **[{ts}]** {text}\n"
+            if meeting.summary_text:
+                content += f"\n## Summary\n\n{meeting.summary_text}\n"
+            Path(path).write_text(content, encoding="utf-8")
 
     # ── Cleanup ─────────────────────────────────────────────────
 
@@ -518,4 +713,5 @@ class MainWindow(QMainWindow):
         self._mic_bars.stop()
         self._sys_bars.stop()
         self._duration_timer.stop()
+        self._db.close()
         event.accept()
