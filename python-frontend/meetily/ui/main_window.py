@@ -441,11 +441,19 @@ class MainWindow(QMainWindow):
 
     def _on_generate_summary(self) -> None:
         """Called when user clicks Generate Summary button."""
+        log.info("Generate summary requested")
         transcript = self._transcript_panel.get_full_transcript()
         if not transcript:
+            log.warning("No transcript available for summarization")
+            QMessageBox.information(
+                self,
+                "No Transcript",
+                "There is no transcript to summarize. Record a meeting first.",
+            )
             return
 
         cfg = SettingsDialog.get_settings()
+        log.info("LLM config: url=%s, model=%s", cfg["llm_url"], cfg["llm_model"])
         if not cfg["llm_url"]:
             QMessageBox.warning(
                 self,
