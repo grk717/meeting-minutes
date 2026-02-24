@@ -409,31 +409,32 @@ QPushButton:pressed {
 
 /* Refresh / subtle button */
 #refreshBtn {
-    background-color: transparent;
-    color: #6b6b80;
+    background-color: #1a1a2e;
+    color: #8080a0;
     font-size: 11px;
     font-weight: 500;
     padding: 5px 12px;
-    border: 1px solid #1e1e32;
+    border: 1px solid #2a2a42;
     border-radius: 6px;
 }
 
 #refreshBtn:hover {
     background-color: #222238;
-    color: #e0e0f0;
-    border-color: #4a4a68;
+    color: #b0b0c4;
+    border-color: #3a3a58;
 }
 
 #refreshBtn:pressed {
     background-color: #13131f;
-    color: #a0a0b8;
+    color: #8080a0;
+    border-color: #2a2a42;
 }
 
 /* Generate summary button */
 #generateBtn {
-    background-color: #6366f1;
-    color: #ffffff;
-    border: none;
+    background-color: #1a1a2e;
+    color: #8080a0;
+    border: 1px solid #2a2a42;
     border-radius: 8px;
     padding: 10px 20px;
     font-weight: 600;
@@ -441,28 +442,28 @@ QPushButton:pressed {
 }
 
 #generateBtn:hover {
-    background-color: #818cf8;
-    color: #ffffff;
-    border: none;
+    background-color: #222238;
+    color: #b0b0c4;
+    border-color: #3a3a58;
 }
 
 #generateBtn:pressed {
-    background-color: #4f46e5;
-    color: #ffffff;
-    border: none;
+    background-color: #13131f;
+    color: #8080a0;
+    border-color: #2a2a42;
 }
 
 #generateBtn:disabled {
-    background-color: #1a1a2a;
+    background-color: #111120;
     color: #3a3a4e;
-    border: 1px solid #1e1e32;
+    border: 1px solid #1a1a2a;
 }
 
 /* Settings button */
 #settingsBtn {
-    background-color: transparent;
-    color: #6b6b80;
-    border: 1px solid #1e1e32;
+    background-color: #1a1a2e;
+    color: #8080a0;
+    border: 1px solid #2a2a42;
     border-radius: 8px;
     padding: 6px 14px;
     font-size: 12px;
@@ -472,13 +473,14 @@ QPushButton:pressed {
 
 #settingsBtn:hover {
     background-color: #222238;
-    color: #e0e0f0;
-    border-color: #4a4a68;
+    color: #b0b0c4;
+    border-color: #3a3a58;
 }
 
 #settingsBtn:pressed {
     background-color: #13131f;
-    color: #a0a0b8;
+    color: #8080a0;
+    border-color: #2a2a42;
 }
 
 QPushButton:disabled {
@@ -629,8 +631,8 @@ MeetingListItem:hover {
 }
 
 #detailActionBtn {
-    background-color: transparent;
-    color: #a0a0b8;
+    background-color: #1a1a2e;
+    color: #8080a0;
     border: 1px solid #2a2a42;
     border-radius: 6px;
     padding: 5px 12px;
@@ -640,20 +642,21 @@ MeetingListItem:hover {
 }
 
 #detailActionBtn:hover {
-    background-color: #252540;
-    color: #f0f0f5;
-    border-color: #4a4a68;
+    background-color: #222238;
+    color: #b0b0c4;
+    border-color: #3a3a58;
 }
 
 #detailActionBtn:pressed {
     background-color: #13131f;
-    color: #a0a0b8;
+    color: #8080a0;
+    border-color: #2a2a42;
 }
 
 #detailPrimaryBtn {
-    background-color: #6366f1;
-    color: #ffffff;
-    border: none;
+    background-color: #1a1a2e;
+    color: #8080a0;
+    border: 1px solid #2a2a42;
     border-radius: 6px;
     padding: 5px 12px;
     font-size: 12px;
@@ -662,20 +665,21 @@ MeetingListItem:hover {
 }
 
 #detailPrimaryBtn:hover {
-    background-color: #818cf8;
-    color: #ffffff;
-    border: none;
+    background-color: #222238;
+    color: #b0b0c4;
+    border-color: #3a3a58;
 }
 
 #detailPrimaryBtn:pressed {
-    background-color: #4f46e5;
-    color: #ffffff;
-    border: none;
+    background-color: #13131f;
+    color: #8080a0;
+    border-color: #2a2a42;
 }
 
 #detailPrimaryBtn:disabled {
-    background-color: #1a1a2a;
+    background-color: #111120;
     color: #3a3a4e;
+    border: 1px solid #1a1a2a;
 }
 
 /* ================================================================
@@ -821,9 +825,9 @@ MeetingListItem:hover {
 }
 
 #speakerApplyBtn {
-    background-color: #6366f1;
-    color: #ffffff;
-    border: none;
+    background-color: #1a1a2e;
+    color: #8080a0;
+    border: 1px solid #2a2a42;
     border-radius: 6px;
     padding: 5px 14px;
     font-size: 12px;
@@ -832,7 +836,15 @@ MeetingListItem:hover {
 }
 
 #speakerApplyBtn:hover {
-    background-color: #7c7ff7;
+    background-color: #222238;
+    color: #b0b0c4;
+    border-color: #3a3a58;
+}
+
+#speakerApplyBtn:pressed {
+    background-color: #13131f;
+    color: #8080a0;
+    border-color: #2a2a42;
 }
 
 /* ================================================================
