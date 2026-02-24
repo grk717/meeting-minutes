@@ -74,11 +74,36 @@ class SummarizationClient:
             ],
         }
 
-        response = requests.post(url, json=payload, headers=headers, timeout=_TIMEOUT)
-        response.raise_for_status()
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=_TIMEOUT)
+        except requests.ConnectionError:
+            raise requests.ConnectionError(
+                f"Cannot reach LLM endpoint at {self._base_url}. Check Settings."
+            )
+        except requests.Timeout:
+            raise requests.Timeout(
+                f"LLM request timed out ({_TIMEOUT}s). The model may be overloaded."
+            )
+
+        if response.status_code in (401, 403):
+            raise requests.HTTPError(
+                "LLM authentication failed. Check your API key in Settings."
+            )
+        if response.status_code == 404:
+            raise requests.HTTPError(
+                f"LLM endpoint not found at {url}. Check the URL in Settings."
+            )
+        if not response.ok:
+            raise requests.HTTPError(
+                f"LLM error: {response.status_code} {response.reason}"
+            )
 
         result = response.json()
-        text = result["choices"][0]["message"]["content"].strip()
+        try:
+            text = result["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, TypeError) as e:
+            log.error("Unexpected LLM response format: %s", e)
+            raise ValueError("LLM returned an unexpected response format.")
 
         if text:
             log.info("Summary generated (%d chars)", len(text))

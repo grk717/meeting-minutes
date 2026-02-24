@@ -38,6 +38,7 @@ from meetily.ui.settings_dialog import SettingsDialog
 from meetily.ui.sidebar import Sidebar
 from meetily.ui.speaker_panel import SpeakerMappingPanel
 from meetily.ui.summary_panel import SummaryPanel
+from meetily.ui.toast import ToastManager
 from meetily.ui.transcript_panel import TranscriptPanel
 
 log = logging.getLogger(__name__)
@@ -80,6 +81,7 @@ class MainWindow(QMainWindow):
     _levels_signal = Signal(AudioLevels)
     _state_signal = Signal(RecordingState)
     _error_signal = Signal(str)
+    _warning_signal = Signal(str)
     _transcript_signal = Signal(str, str)  # (text, timestamp)
     _summary_signal = Signal(str)  # summary text
 
@@ -94,6 +96,7 @@ class MainWindow(QMainWindow):
         self._audio.on_levels_updated = self._on_audio_levels
         self._audio.on_state_changed = self._on_audio_state
         self._audio.on_error = self._on_audio_error
+        self._audio.on_warning = self._on_audio_warning
 
         # Transcription manager (created on recording start)
         self._transcription: TranscriptionManager | None = None
@@ -112,10 +115,14 @@ class MainWindow(QMainWindow):
         self._search_timer.setInterval(300)
         self._search_timer.timeout.connect(self._refresh_sidebar)
 
+        # Toast notifications
+        self._toasts = ToastManager(self)
+
         # Connect internal signals (thread-safe bridge)
         self._levels_signal.connect(self._update_levels_ui)
         self._state_signal.connect(self._update_state_ui)
         self._error_signal.connect(self._show_error)
+        self._warning_signal.connect(self._show_warning)
         self._transcript_signal.connect(self._on_transcript_received)
         self._summary_signal.connect(self._on_summary_received)
 
@@ -421,11 +428,14 @@ class MainWindow(QMainWindow):
                 self._refresh_sidebar()
             except Exception as e:
                 log.error("Failed to save meeting to DB: %s", e)
+                self._toasts.error("Failed to save meeting to database")
 
         if saved_path:
             self._saved_label.setText(f"Saved: {saved_path.name}")
+            self._toasts.success(f"Recording saved: {saved_path.name}")
         else:
             self._saved_label.setText("Recording discarded (too short or empty)")
+            self._toasts.warning("Recording too short or empty — not saved")
 
         # Enable generate button whenever we have a transcript
         if transcript:
@@ -513,6 +523,9 @@ class MainWindow(QMainWindow):
     def _on_audio_error(self, message: str) -> None:
         self._error_signal.emit(message)
 
+    def _on_audio_warning(self, message: str) -> None:
+        self._warning_signal.emit(message)
+
     # ── Transcription callbacks (called from worker thread) ─────
 
     def _on_transcript_from_worker(self, text: str, timestamp: str) -> None:
@@ -577,7 +590,13 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def _on_summary_received(self, summary: str) -> None:
+        if summary.startswith("Summarization failed:"):
+            self._summary_panel.set_summary(summary)
+            self._toasts.error(summary)
+            return
+
         self._summary_panel.set_summary(summary)
+        self._toasts.success("Summary generated")
 
         # Determine which meeting to update
         db_id = None
@@ -595,10 +614,15 @@ class MainWindow(QMainWindow):
                     self._current_detail_meeting = self._db.get_meeting(db_id)
             except Exception as e:
                 log.error("Failed to save summary to DB: %s", e)
+                self._toasts.error("Failed to save summary to database")
 
     @Slot(str)
     def _show_error(self, message: str) -> None:
-        QMessageBox.critical(self, "Audio Error", message)
+        self._toasts.error(message)
+
+    @Slot(str)
+    def _show_warning(self, message: str) -> None:
+        self._toasts.warning(message)
 
     def _update_duration(self) -> None:
         secs = self._audio.get_recording_duration()
@@ -694,6 +718,7 @@ class MainWindow(QMainWindow):
             return
 
         self._db.delete_meeting(meeting_id)
+        self._toasts.success("Meeting deleted")
 
         if (
             self._current_detail_meeting
@@ -714,6 +739,7 @@ class MainWindow(QMainWindow):
         if meeting.summary_text:
             text += "\nSUMMARY\n" + meeting.summary_text
         QApplication.clipboard().setText(text)
+        self._toasts.success("Copied to clipboard")
 
     def _on_export_txt(self) -> None:
         meeting = self._current_detail_meeting
@@ -728,6 +754,7 @@ class MainWindow(QMainWindow):
             if meeting.summary_text:
                 content += f"\n\nSummary:\n{meeting.summary_text}"
             Path(path).write_text(content, encoding="utf-8")
+            self._toasts.success(f"Exported to {Path(path).name}")
 
     def _on_export_md(self) -> None:
         meeting = self._current_detail_meeting
@@ -748,6 +775,7 @@ class MainWindow(QMainWindow):
             if meeting.summary_text:
                 content += f"\n## Summary\n\n{meeting.summary_text}\n"
             Path(path).write_text(content, encoding="utf-8")
+            self._toasts.success(f"Exported to {Path(path).name}")
 
     # ── Retranscription ───────────────────────────────────────────
 
@@ -832,6 +860,9 @@ class MainWindow(QMainWindow):
             self._current_detail_meeting = self._db.get_meeting(meeting.id)
         except Exception as e:
             log.error("Failed to save retranscription to DB: %s", e)
+            self._toasts.error("Failed to save retranscription to database")
+
+        self._toasts.success("Retranscription complete")
 
         # Refresh transcript panel
         self._render_transcript(display_segments, transcript)
@@ -897,6 +928,7 @@ class MainWindow(QMainWindow):
             meeting = self._current_detail_meeting
         except Exception as e:
             log.error("Failed to save speaker names: %s", e)
+            self._toasts.error("Failed to save speaker names")
             return
 
         # Re-render transcript with new names
@@ -918,12 +950,10 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 log.error("Failed to update transcript text: %s", e)
 
+        self._toasts.success("Speaker names updated")
+
     def _on_retranscribe_failed(self, error: str) -> None:
-        QMessageBox.warning(
-            self,
-            "Retranscription Failed",
-            f"The retranscription job failed:\n{error}",
-        )
+        self._toasts.error(f"Retranscription failed: {error}")
         self._retranscribe_widget.reset()
 
     def _on_retranscribe_cancelled(self) -> None:

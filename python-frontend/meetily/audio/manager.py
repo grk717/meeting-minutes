@@ -152,6 +152,7 @@ class AudioManager:
         self.on_levels_updated: Callable[[AudioLevels], None] | None = None
         self.on_state_changed: Callable[[RecordingState], None] | None = None
         self.on_error: Callable[[str], None] | None = None
+        self.on_warning: Callable[[str], None] | None = None
         self.on_audio_chunk: Callable[[np.ndarray], None] | None = None
 
     @property
@@ -352,6 +353,7 @@ class AudioManager:
             except Exception as e:
                 log.error("Failed to start mic stream: %s", e)
                 self._emit_error(f"Microphone error: {e}")
+                self._set_state(RecordingState.IDLE)
                 return
 
         # Start system audio stream
@@ -369,6 +371,7 @@ class AudioManager:
                 except Exception as e:
                     log.warning("Failed to start WASAPI loopback: %s (continuing with mic only)", e)
                     self._loopback_stream = None
+                    self._emit_warning("System audio unavailable — recording microphone only")
             else:
                 # Standard sounddevice input (virtual device / macOS BlackHole / Linux monitor)
                 try:
@@ -384,6 +387,7 @@ class AudioManager:
                     log.info("System audio stream started on device %d", system_device)
                 except Exception as e:
                     log.warning("Failed to start system audio: %s (continuing with mic only)", e)
+                    self._emit_warning("System audio unavailable — recording microphone only")
 
         self._set_state(RecordingState.RECORDING)
 
@@ -602,6 +606,11 @@ class AudioManager:
         log.error(message)
         if self.on_error:
             self.on_error(message)
+
+    def _emit_warning(self, message: str) -> None:
+        log.warning(message)
+        if self.on_warning:
+            self.on_warning(message)
 
     def get_recording_duration(self) -> float:
         """Get current recording duration in seconds."""

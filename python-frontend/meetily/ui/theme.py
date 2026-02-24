@@ -420,4 +420,73 @@ MeetingListItem:hover {
 #speakerApplyBtn:hover {
     background-color: #5c7cff;
 }
+
+/* ── Toast notifications ── */
+#toast {
+    border-radius: 8px;
+    border: 1px solid #2a2a4a;
+    padding: 4px;
+}
+
+#toast[toastType="success"] {
+    background-color: #1a3a2a;
+    border-color: #2a6a3a;
+}
+
+#toast[toastType="error"] {
+    background-color: #3a1a1a;
+    border-color: #6a2a2a;
+}
+
+#toast[toastType="warning"] {
+    background-color: #3a2e1a;
+    border-color: #6a5a2a;
+}
+
+#toast[toastType="info"] {
+    background-color: #1a2a3e;
+    border-color: #2a4a6a;
+}
+
+#toastIconSuccess {
+    color: #4cd964;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+#toastIconError {
+    color: #e03131;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+#toastIconWarning {
+    color: #f59f00;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+#toastIconInfo {
+    color: #4c6ef5;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+#toastMessage {
+    color: #e0e0e0;
+    font-size: 12px;
+}
+
+#toastCloseBtn {
+    background-color: transparent;
+    color: #666688;
+    border: none;
+    font-size: 12px;
+    padding: 0;
+    min-width: 0;
+}
+
+#toastCloseBtn:hover {
+    color: #aaaacc;
+}
 """

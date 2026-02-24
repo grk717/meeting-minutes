@@ -53,17 +53,38 @@ class TranscriptionClient:
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
 
-        response = requests.post(
-            url,
-            files={"file": ("audio.wav", buf, "audio/wav")},
-            data={
-                "model": "whisper-1",
-                "response_format": "json",
-            },
-            headers=headers,
-            timeout=_TIMEOUT,
-        )
-        response.raise_for_status()
+        try:
+            response = requests.post(
+                url,
+                files={"file": ("audio.wav", buf, "audio/wav")},
+                data={
+                    "model": "whisper-1",
+                    "response_format": "json",
+                },
+                headers=headers,
+                timeout=_TIMEOUT,
+            )
+        except requests.ConnectionError:
+            raise requests.ConnectionError(
+                f"Cannot reach ASR endpoint at {self._base_url}. Check Settings."
+            )
+        except requests.Timeout:
+            raise requests.Timeout(
+                f"ASR endpoint timed out ({_TIMEOUT}s). The server may be overloaded."
+            )
+
+        if response.status_code in (401, 403):
+            raise requests.HTTPError(
+                "ASR authentication failed. Check your API key in Settings."
+            )
+        if response.status_code == 404:
+            raise requests.HTTPError(
+                f"ASR endpoint not found at {url}. Check the URL in Settings."
+            )
+        if not response.ok:
+            raise requests.HTTPError(
+                f"ASR error: {response.status_code} {response.reason}"
+            )
 
         result = response.json()
         text = result.get("text", "").strip()
