@@ -22,8 +22,9 @@ class Meeting:
     duration_secs: float = 0.0
     wav_path: str = ""
     transcript_text: str = ""
-    transcript_segments: list[tuple[str, str]] = field(default_factory=list)
+    transcript_segments: list[tuple] = field(default_factory=list)  # (ts, text) or (ts, text, speaker_id)
     summary_text: str = ""
+    speaker_names: dict[str, str] = field(default_factory=dict)  # {speaker_id: name}
     updated_at: str = ""
 
 
@@ -60,6 +61,15 @@ class MeetingDatabase:
                 updated_at TEXT NOT NULL
             )"""
         )
+        # Migration: add speaker_names column if missing
+        cols = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(meetings)")
+        }
+        if "speaker_names" not in cols:
+            self._conn.execute(
+                "ALTER TABLE meetings ADD COLUMN speaker_names TEXT DEFAULT '{}'"
+            )
         self._conn.commit()
 
     def close(self) -> None:
@@ -71,11 +81,13 @@ class MeetingDatabase:
         """Insert a new meeting. Returns the new row id."""
         now = time.strftime("%Y-%m-%dT%H:%M:%S")
         segments_json = json.dumps(meeting.transcript_segments)
+        speaker_names_json = json.dumps(meeting.speaker_names)
         cursor = self._conn.execute(
             """INSERT INTO meetings
                (name, created_at, duration_secs, wav_path,
-                transcript_text, transcript_segments, summary_text, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                transcript_text, transcript_segments, summary_text,
+                speaker_names, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 meeting.name,
                 meeting.created_at or now,
@@ -84,6 +96,7 @@ class MeetingDatabase:
                 meeting.transcript_text,
                 segments_json,
                 meeting.summary_text,
+                speaker_names_json,
                 now,
             ),
         )
@@ -103,7 +116,7 @@ class MeetingDatabase:
         self,
         meeting_id: int,
         transcript_text: str,
-        segments: list[tuple[str, str]],
+        segments: list[tuple],
     ) -> None:
         """Replace transcript for a meeting (after retranscription)."""
         now = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -113,6 +126,17 @@ class MeetingDatabase:
                SET transcript_text = ?, transcript_segments = ?, updated_at = ?
                WHERE id = ?""",
             (transcript_text, segments_json, now, meeting_id),
+        )
+        self._conn.commit()
+
+    def update_speaker_names(
+        self, meeting_id: int, speaker_names: dict[str, str]
+    ) -> None:
+        """Update speaker name mapping for a meeting."""
+        now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        self._conn.execute(
+            "UPDATE meetings SET speaker_names = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(speaker_names), now, meeting_id),
         )
         self._conn.commit()
 
@@ -158,6 +182,8 @@ class MeetingDatabase:
             if row["transcript_segments"]
             else []
         )
+        speaker_names_raw = row["speaker_names"] if "speaker_names" in row.keys() else "{}"
+        speaker_names = json.loads(speaker_names_raw) if speaker_names_raw else {}
         return Meeting(
             id=row["id"],
             name=row["name"],
@@ -167,5 +193,6 @@ class MeetingDatabase:
             transcript_text=row["transcript_text"] or "",
             transcript_segments=[tuple(s) for s in segments],
             summary_text=row["summary_text"] or "",
+            speaker_names=speaker_names if isinstance(speaker_names, dict) else {},
             updated_at=row["updated_at"],
         )

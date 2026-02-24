@@ -372,4 +372,52 @@ MeetingListItem:hover {
     color: #a0a0c0;
     font-style: italic;
 }
+
+/* ── Speaker mapping panel ── */
+#speakerPanel {
+    background-color: #16213e;
+    border-bottom: 1px solid #2a2a4a;
+    padding: 4px 8px;
+}
+
+#speakerPanelTitle {
+    font-size: 12px;
+    font-weight: 600;
+    color: #a0a0c0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#speakerLabel {
+    font-size: 12px;
+    color: #8888aa;
+}
+
+#speakerInput {
+    background-color: #0f1a30;
+    border: 1px solid #2a2a4a;
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: #e0e0e0;
+    font-size: 12px;
+}
+
+#speakerInput:focus {
+    border-color: #4c6ef5;
+}
+
+#speakerApplyBtn {
+    background-color: #4c6ef5;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 0;
+}
+
+#speakerApplyBtn:hover {
+    background-color: #5c7cff;
+}
 """

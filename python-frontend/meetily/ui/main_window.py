@@ -36,6 +36,7 @@ from meetily.ui.meeting_detail import MeetingDetailBar
 from meetily.ui.retranscribe_widget import RetranscribeWidget
 from meetily.ui.settings_dialog import SettingsDialog
 from meetily.ui.sidebar import Sidebar
+from meetily.ui.speaker_panel import SpeakerMappingPanel
 from meetily.ui.summary_panel import SummaryPanel
 from meetily.ui.transcript_panel import TranscriptPanel
 
@@ -190,6 +191,11 @@ class MainWindow(QMainWindow):
         self._retranscribe_widget.failed.connect(self._on_retranscribe_failed)
         self._retranscribe_widget.cancelled.connect(self._on_retranscribe_cancelled)
         right_layout.addWidget(self._retranscribe_widget)
+
+        # ── Speaker name mapping panel (hidden by default) ──
+        self._speaker_panel = SpeakerMappingPanel()
+        self._speaker_panel.mapping_applied.connect(self._on_speaker_mapping_applied)
+        right_layout.addWidget(self._speaker_panel)
 
         # ── Three-column horizontal layout ──
         columns = QHBoxLayout()
@@ -634,10 +640,27 @@ class MainWindow(QMainWindow):
         self._detail_bar.setVisible(True)
         self._detail_bar.set_meeting(meeting)
 
-        # Populate transcript panel
+        # Populate transcript panel (apply speaker names if available)
         self._transcript_panel.clear()
-        for timestamp, text in meeting.transcript_segments:
-            self._transcript_panel.add_segment(text, timestamp)
+        has_speakers = any(
+            len(seg) >= 3 and seg[2] for seg in meeting.transcript_segments
+        )
+        if has_speakers:
+            display_segments = self._apply_speaker_names(
+                meeting.transcript_segments, meeting.speaker_names
+            )
+            for ts, text in display_segments:
+                self._transcript_panel.add_segment(text, ts)
+            # Show speaker mapping panel
+            speaker_ids = sorted({
+                str(seg[2]) for seg in meeting.transcript_segments
+                if len(seg) >= 3 and seg[2]
+            })
+            self._speaker_panel.set_speakers(speaker_ids, meeting.speaker_names)
+        else:
+            for timestamp, text in meeting.transcript_segments:
+                self._transcript_panel.add_segment(text, timestamp)
+            self._speaker_panel.reset()
         if not meeting.transcript_segments and meeting.transcript_text:
             self._transcript_panel.add_segment(meeting.transcript_text, "")
 
@@ -653,6 +676,7 @@ class MainWindow(QMainWindow):
         self._rec_widget.setVisible(True)
         self._detail_bar.setVisible(False)
         self._retranscribe_widget.reset()
+        self._speaker_panel.reset()
         self._sidebar.set_selected(None)
 
         if self._audio.state == RecordingState.IDLE:
@@ -716,7 +740,10 @@ class MainWindow(QMainWindow):
             content = f"# {meeting.name}\n\n"
             content += f"**Date:** {meeting.created_at}\n\n"
             content += "## Transcript\n\n"
-            for ts, text in meeting.transcript_segments:
+            display_segs = self._apply_speaker_names(
+                meeting.transcript_segments, meeting.speaker_names
+            )
+            for ts, text in display_segs:
                 content += f"- **[{ts}]** {text}\n"
             if meeting.summary_text:
                 content += f"\n## Summary\n\n{meeting.summary_text}\n"
@@ -766,32 +793,40 @@ class MainWindow(QMainWindow):
             self._retranscribe_widget.reset()
             return
 
-        # Convert API segments [{start, end, text, speaker}] to [(MM:SS, text)]
+        # Convert API segments to 3-tuples: (MM:SS, text, speaker_id)
+        # Backend returns capitalized keys: Start, End, Content, Speaker
         converted_segments = []
+        speaker_ids = set()
         for seg in segments:
             if not isinstance(seg, dict):
                 continue
-            text = seg.get("text", "").strip()
-            # Skip silence segments
+            text = (seg.get("Content") or seg.get("content")
+                    or seg.get("text") or seg.get("Text") or "")
+            text = str(text).strip()
             if not text or text == "[Silence]":
                 continue
-            start = seg.get("start", 0.0)
-            speaker = seg.get("speaker", "")
+            start = seg.get("Start", seg.get("start", 0.0))
+            try:
+                start = float(start)
+            except (TypeError, ValueError):
+                start = 0.0
+            speaker = seg.get("Speaker", seg.get("speaker", None))
             mins = int(start) // 60
             secs = int(start) % 60
-            # Prefix with speaker label if present
-            if speaker != "" and speaker is not None:
-                text = f"Speaker {speaker}: {text}"
-            converted_segments.append((f"{mins:02d}:{secs:02d}", text))
+            speaker_id = str(speaker) if speaker is not None else ""
+            if speaker_id:
+                speaker_ids.add(speaker_id)
+            converted_segments.append((f"{mins:02d}:{secs:02d}", text, speaker_id))
 
-        # Build full transcript text from segments
+        # Build display text with speaker labels
+        display_segments = self._apply_speaker_names(converted_segments, {})
         full_text = "\n".join(
-            f"[{ts}]  {text}" for ts, text in converted_segments
+            f"[{ts}]  {text}" for ts, text in display_segments
         )
         if not full_text:
             full_text = transcript
 
-        # Update DB
+        # Update DB (store 3-tuples with speaker IDs for re-mapping)
         try:
             self._db.update_transcript(meeting.id, full_text, converted_segments)
             self._current_detail_meeting = self._db.get_meeting(meeting.id)
@@ -799,16 +834,89 @@ class MainWindow(QMainWindow):
             log.error("Failed to save retranscription to DB: %s", e)
 
         # Refresh transcript panel
-        self._transcript_panel.clear()
-        for ts, text in converted_segments:
-            self._transcript_panel.add_segment(text, ts)
-        if not converted_segments and transcript:
-            self._transcript_panel.add_segment(transcript, "")
+        self._render_transcript(display_segments, transcript)
+
+        # Show speaker mapping panel if speakers were detected
+        if speaker_ids:
+            saved_names = meeting.speaker_names or {}
+            self._speaker_panel.set_speakers(sorted(speaker_ids), saved_names)
+        else:
+            self._speaker_panel.reset()
 
         # Enable summary generation with new transcript
         self._summary_panel.set_generate_enabled(True)
         self._refresh_sidebar()
         self._retranscribe_widget.reset()
+
+    @staticmethod
+    def _apply_speaker_names(
+        segments: list[tuple], names: dict[str, str]
+    ) -> list[tuple[str, str]]:
+        """Convert 3-tuples (ts, text, speaker_id) to 2-tuples (ts, display_text).
+
+        Applies speaker name mapping: if a name is set for a speaker ID,
+        use it; otherwise fall back to "Speaker N:".
+        Also handles legacy 2-tuples gracefully.
+        """
+        result = []
+        for seg in segments:
+            if len(seg) >= 3:
+                ts, text, speaker_id = seg[0], seg[1], seg[2]
+            else:
+                ts, text = seg[0], seg[1]
+                speaker_id = ""
+
+            if speaker_id:
+                label = names.get(str(speaker_id), f"Speaker {speaker_id}")
+                display = f"{label}: {text}"
+            else:
+                display = text
+            result.append((ts, display))
+        return result
+
+    def _render_transcript(
+        self, display_segments: list[tuple[str, str]], fallback: str = ""
+    ) -> None:
+        """Clear and re-populate the transcript panel."""
+        self._transcript_panel.clear()
+        for ts, text in display_segments:
+            self._transcript_panel.add_segment(text, ts)
+        if not display_segments and fallback:
+            self._transcript_panel.add_segment(fallback, "")
+
+    def _on_speaker_mapping_applied(self, mapping: dict) -> None:
+        """User clicked Apply on the speaker mapping panel."""
+        meeting = self._current_detail_meeting
+        if not meeting:
+            return
+
+        # Save mapping to DB
+        try:
+            self._db.update_speaker_names(meeting.id, mapping)
+            self._current_detail_meeting = self._db.get_meeting(meeting.id)
+            meeting = self._current_detail_meeting
+        except Exception as e:
+            log.error("Failed to save speaker names: %s", e)
+            return
+
+        # Re-render transcript with new names
+        display_segments = self._apply_speaker_names(
+            meeting.transcript_segments, mapping
+        )
+        self._render_transcript(display_segments, meeting.transcript_text)
+
+        # Rebuild full transcript text with names applied and save to DB
+        full_text = "\n".join(
+            f"[{ts}]  {text}" for ts, text in display_segments
+        )
+        if full_text:
+            try:
+                self._db.update_transcript(
+                    meeting.id, full_text, meeting.transcript_segments
+                )
+                self._current_detail_meeting = self._db.get_meeting(meeting.id)
+            except Exception as e:
+                log.error("Failed to update transcript text: %s", e)
 
     def _on_retranscribe_failed(self, error: str) -> None:
         QMessageBox.warning(
