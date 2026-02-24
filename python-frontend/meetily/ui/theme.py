@@ -48,9 +48,13 @@ QMainWindow {
 }
 
 QWidget {
-    color: #f0f0f5;
+    background-color: transparent;
     font-family: "Inter", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
+}
+
+QLabel {
+    color: #f0f0f5;
 }
 
 /* ================================================================

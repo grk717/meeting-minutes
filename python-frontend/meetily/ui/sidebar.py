@@ -185,6 +185,7 @@ class Sidebar(QWidget):
         self._scroll.setObjectName("sidebarScroll")
 
         self._list_container = QWidget()
+        self._list_container.setStyleSheet("background-color: transparent;")
         self._list_layout = QVBoxLayout(self._list_container)
         self._list_layout.setContentsMargins(8, 8, 8, 8)
         self._list_layout.setSpacing(2)
