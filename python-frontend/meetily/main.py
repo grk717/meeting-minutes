@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
 
-from PySide6.QtGui import QFontDatabase, QFont
+from PySide6.QtGui import QFontDatabase, QFont, QIcon
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 
 from meetily.ui.main_window import MainWindow
 from meetily.ui.theme import DARK_THEME
+from meetily.utils.paths import fonts_dir, icon_path
 
 
 def setup_logging() -> None:
@@ -24,8 +24,8 @@ def setup_logging() -> None:
 
 def _load_bundled_fonts() -> None:
     """Load Inter and JetBrains Mono from the bundled fonts directory."""
-    fonts_dir = Path(__file__).parent / "ui" / "fonts"
-    for font_file in fonts_dir.glob("*.ttf"):
+    fdir = fonts_dir()
+    for font_file in fdir.glob("*.ttf"):
         font_id = QFontDatabase.addApplicationFont(str(font_file))
         if font_id >= 0:
             families = QFontDatabase.applicationFontFamilies(font_id)
@@ -42,6 +42,11 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Meetily")
     app.setOrganizationName("Meetily")
+
+    # Set application icon
+    _icon = icon_path()
+    if _icon.exists():
+        app.setWindowIcon(QIcon(str(_icon)))
 
     # Enable high-DPI scaling
     app.setHighDpiScaleFactorRoundingPolicy(

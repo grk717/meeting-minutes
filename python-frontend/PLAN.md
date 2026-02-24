@@ -278,11 +278,42 @@ python-frontend/
 - Toast notifications
 - Error handling and recovery
 
-### Phase 7: Packaging — TODO
+### Phase 7: Packaging — DONE
 
-- PyInstaller for .app (macOS) and .exe (Windows)
-- App icon, code signing
-- Auto-updater (optional)
+**What's implemented:**
+
+#### `meetily/utils/paths.py` — Resource Path Helper
+- `_bundle_dir()` — resolves `sys._MEIPASS / "meetily"` in frozen mode, `Path(__file__).parent.parent` in dev
+- `fonts_dir()` — path to bundled TTF fonts (works in both dev and frozen mode)
+- `icon_path()` — path to app icon PNG (works in both dev and frozen mode)
+
+#### `meetily/resources/` — App Icons
+- `icon.png` (512x512) — runtime window icon, copied from Tauri frontend
+- `icon.icns` — macOS app bundle icon
+- `icon.ico` — Windows executable icon
+
+#### `meetily.spec` — PyInstaller Spec File
+- One-dir mode for faster startup and easier debugging
+- Bundles fonts (`InterVariable.ttf`, `JetBrainsMono.ttf`) and icon under `meetily/` prefix
+- Hidden imports: `webrtcvad`, `sounddevice`, `soundfile`, `numpy`, `PySide6.QtSvg`
+- Conditional `pyaudiowpatch` on Windows
+- Excludes `tkinter`, `unittest`, `test`, `xmlrpc`, `pydoc`, `doctest` to reduce size
+- Platform-specific icon: `.icns` (macOS), `.ico` (Windows), `.png` (Linux)
+- macOS BUNDLE with `NSMicrophoneUsageDescription`, `bundle_identifier`, `NSHighResolutionCapable`
+- `console=False` for GUI mode (no terminal window)
+
+#### `build.sh` / `build.bat` — Build Scripts
+- `build.sh` (macOS/Linux): checks Python, installs dev deps if needed, cleans, runs PyInstaller
+- `build.bat` (Windows): same flow adapted for Windows batch
+
+#### Modified files:
+- `meetily/main.py` — uses `paths.fonts_dir()` for font loading (frozen-safe), sets `QIcon` window icon
+- `.gitignore` — added `*.manifest` (PyInstaller artifact)
+
+**Not included (deferred):**
+- Code signing — requires developer certificates; spec has `codesign_identity` placeholder
+- Auto-updater — requires update server infrastructure
+- DMG/NSIS/AppImage installers — layer on top of PyInstaller output
 
 ## How to Run
 
@@ -297,6 +328,20 @@ Or without installing:
 pip install PySide6 sounddevice numpy soundfile PyAudioWPatch
 python meetily/main.py
 ```
+
+## How to Build
+
+```bash
+cd python-frontend
+
+# macOS / Linux
+./build.sh
+
+# Windows
+build.bat
+```
+
+Output: `dist/Meetily/` (all platforms) + `dist/Meetily.app` (macOS only)
 
 ## Platform Notes
 
