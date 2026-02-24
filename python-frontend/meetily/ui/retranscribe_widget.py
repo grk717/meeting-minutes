@@ -1,4 +1,7 @@
-"""Inline widget showing retranscription job progress."""
+"""Inline widget showing retranscription job progress.
+
+Redesigned with cleaner status display and cancel action.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +17,7 @@ log = logging.getLogger(__name__)
 
 
 class RetranscribeWidget(QWidget):
-    """Shows retranscription progress: queued → processing → done/failed."""
+    """Shows retranscription progress: queued -> processing -> done/failed."""
 
     # (full_transcript, segments as list of dicts)
     completed = Signal(str, list)
@@ -22,25 +25,30 @@ class RetranscribeWidget(QWidget):
     cancelled = Signal()
 
     # Internal signals for thread-safe UI updates
-    _submit_done = Signal(dict)   # submit response
-    _submit_error = Signal(str)   # submit failed
+    _submit_done = Signal(dict)
+    _submit_error = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("retranscribeWidget")
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(10)
+
+        # Status indicator dot
+        self._dot = QLabel("\u2022")
+        self._dot.setStyleSheet("color: #6366f1; font-size: 18px;")
+        self._dot.setFixedWidth(14)
+        layout.addWidget(self._dot)
 
         self._status_label = QLabel("")
         self._status_label.setObjectName("retranscribeStatus")
         layout.addWidget(self._status_label, 1)
 
         self._cancel_btn = QPushButton("Cancel")
-        self._cancel_btn.setObjectName("pauseBtn")
+        self._cancel_btn.setObjectName("detailActionBtn")
         self._cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._cancel_btn.setFixedWidth(60)
         self._cancel_btn.clicked.connect(self._on_cancel)
         layout.addWidget(self._cancel_btn)
 
@@ -69,10 +77,10 @@ class RetranscribeWidget(QWidget):
         self._client = RetranscribeClient(backend_url)
         self._job_id = None
         self._status_label.setText("Uploading audio...")
+        self._dot.setStyleSheet("color: #fbbf24; font-size: 18px;")
         self._cancel_btn.setEnabled(True)
         self.setVisible(True)
 
-        # Submit in background thread (file upload can be slow)
         def _submit() -> None:
             try:
                 result = self._client.submit(
@@ -100,11 +108,13 @@ class RetranscribeWidget(QWidget):
             self._status_label.setText(f"Queued (position {pos})...")
         else:
             self._status_label.setText("Queued...")
+        self._dot.setStyleSheet("color: #6366f1; font-size: 18px;")
         self._poll_timer.start()
 
     def _on_submit_error(self, error: str) -> None:
         log.error("Retranscription submit failed: %s", error)
         self._status_label.setText("Upload failed")
+        self._dot.setStyleSheet("color: #f87171; font-size: 18px;")
         self._cancel_btn.setEnabled(False)
         self.failed.emit(f"Failed to submit: {error}")
 
@@ -127,15 +137,18 @@ class RetranscribeWidget(QWidget):
                 self._status_label.setText(f"Queued (position {pos})...")
             else:
                 self._status_label.setText("Queued...")
+            self._dot.setStyleSheet("color: #6366f1; font-size: 18px;")
 
         elif status == "processing":
             progress = result.get("progress", 0.0)
             pct = int(progress * 100)
             self._status_label.setText(f"Transcribing... {pct}%")
+            self._dot.setStyleSheet("color: #fbbf24; font-size: 18px;")
 
         elif status == "completed":
             self._poll_timer.stop()
-            self._status_label.setText("Complete!")
+            self._status_label.setText("Complete")
+            self._dot.setStyleSheet("color: #34d399; font-size: 18px;")
             self._cancel_btn.setEnabled(False)
             transcript = result.get("transcript", "")
             segments = result.get("segments", [])
@@ -145,12 +158,14 @@ class RetranscribeWidget(QWidget):
             self._poll_timer.stop()
             error = result.get("error", "Unknown error")
             self._status_label.setText(f"Failed: {error}")
+            self._dot.setStyleSheet("color: #f87171; font-size: 18px;")
             self._cancel_btn.setEnabled(False)
             self.failed.emit(error)
 
         elif status == "cancelled":
             self._poll_timer.stop()
             self._status_label.setText("Cancelled")
+            self._dot.setStyleSheet("color: #6b6b80; font-size: 18px;")
             self._cancel_btn.setEnabled(False)
             self.cancelled.emit()
 
@@ -165,6 +180,7 @@ class RetranscribeWidget(QWidget):
                 log.warning("Cancel request failed: %s", e)
 
         self._status_label.setText("Cancelled")
+        self._dot.setStyleSheet("color: #6b6b80; font-size: 18px;")
         self.cancelled.emit()
 
     def reset(self) -> None:

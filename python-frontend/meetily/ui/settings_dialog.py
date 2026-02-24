@@ -1,12 +1,16 @@
-"""Settings dialog for ASR endpoint configuration."""
+"""Modern settings dialog for ASR/LLM/Backend endpoint configuration.
+
+Redesigned with grouped sections, better labels, and visual hierarchy.
+"""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
-    QFormLayout,
+    QFrame,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QVBoxLayout,
@@ -23,79 +27,125 @@ _DEFAULTS = {
 }
 
 
+def _make_field(
+    label_text: str, value: str, placeholder: str, is_password: bool = False
+) -> tuple[QWidget, QLineEdit]:
+    """Create a labeled input field with consistent styling."""
+    container = QWidget()
+    layout = QVBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(4)
+
+    label = QLabel(label_text)
+    label.setObjectName("settingsFieldLabel")
+    layout.addWidget(label)
+
+    line_edit = QLineEdit(value)
+    line_edit.setPlaceholderText(placeholder)
+    if is_password:
+        line_edit.setEchoMode(QLineEdit.EchoMode.Password)
+    layout.addWidget(line_edit)
+
+    return container, line_edit
+
+
+def _make_divider() -> QWidget:
+    """Create a subtle horizontal divider."""
+    divider = QWidget()
+    divider.setFixedHeight(1)
+    divider.setObjectName("divider")
+    return divider
+
+
 class SettingsDialog(QDialog):
-    """Dialog for configuring ASR endpoint settings."""
+    """Dialog for configuring ASR, LLM, and backend endpoint settings."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(480)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-
-        # Description
-        desc = QLabel("Configure the speech recognition API endpoint (OpenAI-compatible).")
-        desc.setWordWrap(True)
-        layout.addWidget(desc)
-
-        # Form
-        form = QFormLayout()
-        form.setSpacing(10)
+        layout.setSpacing(20)
+        layout.setContentsMargins(24, 24, 24, 24)
 
         current = self.get_settings()
 
-        self._url_input = QLineEdit(current["asr_url"])
-        self._url_input.setPlaceholderText("http://localhost:8178")
-        form.addRow("ASR Endpoint URL:", self._url_input)
+        # ── ASR Section ──
+        asr_section = QLabel("Speech Recognition")
+        asr_section.setObjectName("settingsSection")
+        layout.addWidget(asr_section)
 
-        self._key_input = QLineEdit(current["asr_api_key"])
-        self._key_input.setPlaceholderText("Optional API key")
-        self._key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        form.addRow("API Key:", self._key_input)
+        asr_desc = QLabel(
+            "OpenAI-compatible transcription endpoint for real-time speech recognition."
+        )
+        asr_desc.setObjectName("settingsDesc")
+        asr_desc.setWordWrap(True)
+        layout.addWidget(asr_desc)
 
-        layout.addLayout(form)
+        url_widget, self._url_input = _make_field(
+            "Endpoint URL", current["asr_url"], "http://localhost:8178"
+        )
+        layout.addWidget(url_widget)
 
-        # LLM section
-        llm_header = QLabel("Summarization (OpenAI-compatible chat completions)")
-        llm_header.setWordWrap(True)
-        layout.addWidget(llm_header)
+        key_widget, self._key_input = _make_field(
+            "API Key", current["asr_api_key"], "Optional", is_password=True
+        )
+        layout.addWidget(key_widget)
 
-        llm_form = QFormLayout()
-        llm_form.setSpacing(10)
+        layout.addWidget(_make_divider())
 
-        self._llm_url_input = QLineEdit(current["llm_url"])
-        self._llm_url_input.setPlaceholderText("http://localhost:11434")
-        llm_form.addRow("LLM Endpoint URL:", self._llm_url_input)
+        # ── LLM Section ──
+        llm_section = QLabel("Summarization")
+        llm_section.setObjectName("settingsSection")
+        layout.addWidget(llm_section)
 
-        self._llm_key_input = QLineEdit(current["llm_api_key"])
-        self._llm_key_input.setPlaceholderText("Optional API key")
-        self._llm_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        llm_form.addRow("LLM API Key:", self._llm_key_input)
+        llm_desc = QLabel(
+            "OpenAI-compatible chat completions endpoint for meeting summaries."
+        )
+        llm_desc.setObjectName("settingsDesc")
+        llm_desc.setWordWrap(True)
+        layout.addWidget(llm_desc)
 
-        self._llm_model_input = QLineEdit(current["llm_model"])
-        self._llm_model_input.setPlaceholderText("gpt-4o-mini")
-        llm_form.addRow("Model:", self._llm_model_input)
+        llm_url_widget, self._llm_url_input = _make_field(
+            "Endpoint URL", current["llm_url"], "http://localhost:11434"
+        )
+        layout.addWidget(llm_url_widget)
 
-        layout.addLayout(llm_form)
+        llm_key_widget, self._llm_key_input = _make_field(
+            "API Key", current["llm_api_key"], "Optional", is_password=True
+        )
+        layout.addWidget(llm_key_widget)
 
-        # Backend section
-        backend_header = QLabel("Backend (retranscription queue)")
-        backend_header.setWordWrap(True)
-        layout.addWidget(backend_header)
+        llm_model_widget, self._llm_model_input = _make_field(
+            "Model", current["llm_model"], "gpt-4o-mini"
+        )
+        layout.addWidget(llm_model_widget)
 
-        backend_form = QFormLayout()
-        backend_form.setSpacing(10)
+        layout.addWidget(_make_divider())
 
-        self._backend_url_input = QLineEdit(current["backend_url"])
-        self._backend_url_input.setPlaceholderText("http://localhost:5167")
-        backend_form.addRow("Backend URL:", self._backend_url_input)
+        # ── Backend Section ──
+        backend_section = QLabel("Backend")
+        backend_section.setObjectName("settingsSection")
+        layout.addWidget(backend_section)
 
-        layout.addLayout(backend_form)
+        backend_desc = QLabel(
+            "Meetily backend server for retranscription queue and meeting storage."
+        )
+        backend_desc.setObjectName("settingsDesc")
+        backend_desc.setWordWrap(True)
+        layout.addWidget(backend_desc)
 
-        # Buttons
+        backend_url_widget, self._backend_url_input = _make_field(
+            "Backend URL", current["backend_url"], "http://localhost:5167"
+        )
+        layout.addWidget(backend_url_widget)
+
+        # ── Buttons ──
+        layout.addSpacing(8)
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
         )
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
@@ -121,5 +171,7 @@ class SettingsDialog(QDialog):
             "llm_url": settings.value("llm_url", _DEFAULTS["llm_url"]),
             "llm_api_key": settings.value("llm_api_key", _DEFAULTS["llm_api_key"]),
             "llm_model": settings.value("llm_model", _DEFAULTS["llm_model"]),
-            "backend_url": settings.value("backend_url", _DEFAULTS["backend_url"]),
+            "backend_url": settings.value(
+                "backend_url", _DEFAULTS["backend_url"]
+            ),
         }

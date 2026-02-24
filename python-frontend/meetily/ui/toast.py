@@ -1,11 +1,21 @@
-"""Auto-dismissing toast notifications for user feedback."""
+"""Polished auto-dismissing toast notifications for user feedback.
+
+Redesigned with refined colors, smoother animations, and modern styling.
+"""
 
 from __future__ import annotations
 
 from enum import Enum
 
 from PySide6.QtCore import QPropertyAnimation, QTimer, Qt, QEasingCurve
-from PySide6.QtWidgets import QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QWidget,
+)
 
 
 class ToastType(Enum):
@@ -16,10 +26,10 @@ class ToastType(Enum):
 
 
 _ICONS = {
-    ToastType.SUCCESS: "\u2713",  # ✓
-    ToastType.ERROR: "\u2717",    # ✗
-    ToastType.WARNING: "\u26A0",  # ⚠
-    ToastType.INFO: "\u2139",     # ℹ
+    ToastType.SUCCESS: "\u2713",  # check
+    ToastType.ERROR: "\u2717",    # x
+    ToastType.WARNING: "\u26A0",  # warning
+    ToastType.INFO: "\u2139",     # info
 }
 
 
@@ -36,16 +46,16 @@ class Toast(QFrame):
         super().__init__(parent)
         self.setObjectName("toast")
         self.setProperty("toastType", toast_type.value)
-        self.setFixedWidth(340)
+        self.setFixedWidth(360)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(14, 10, 10, 10)
+        layout.setSpacing(10)
 
         # Icon
         icon_label = QLabel(_ICONS.get(toast_type, ""))
         icon_label.setObjectName(f"toastIcon{toast_type.value.title()}")
-        icon_label.setFixedWidth(20)
+        icon_label.setFixedWidth(18)
         layout.addWidget(icon_label)
 
         # Message
@@ -55,7 +65,7 @@ class Toast(QFrame):
         layout.addWidget(msg_label, 1)
 
         # Close button
-        close_btn = QPushButton("\u2715")  # ✕
+        close_btn = QPushButton("\u2715")
         close_btn.setObjectName("toastCloseBtn")
         close_btn.setFixedSize(20, 20)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -86,9 +96,8 @@ class Toast(QFrame):
         self._dismissed = True
         self._timer.stop()
 
-        # Fade out via opacity effect
         anim = QPropertyAnimation(self._opacity, b"opacity", self)
-        anim.setDuration(200)
+        anim.setDuration(250)
         anim.setStartValue(1.0)
         anim.setEndValue(0.0)
         anim.setEasingCurve(QEasingCurve.Type.InQuad)
@@ -108,7 +117,7 @@ class ToastManager:
         self._parent = parent
         self._toasts: list[Toast] = []
         self._margin = 16
-        self._gap = 8
+        self._gap = 6
 
     def show_toast(
         self,
@@ -142,7 +151,7 @@ class ToastManager:
     def _reposition(self) -> None:
         """Stack toasts from top-right of the parent widget."""
         parent_rect = self._parent.rect()
-        x = parent_rect.right() - 340 - self._margin
+        x = parent_rect.right() - 360 - self._margin
         y = self._margin
 
         for toast in self._toasts:

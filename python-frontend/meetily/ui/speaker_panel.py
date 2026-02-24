@@ -1,4 +1,7 @@
-"""Inline panel for mapping speaker IDs to human-readable names."""
+"""Inline panel for mapping speaker IDs to human-readable names.
+
+Redesigned with better spacing and visual consistency.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +19,8 @@ from PySide6.QtWidgets import (
 class SpeakerMappingPanel(QWidget):
     """Compact inline panel showing one input per detected speaker.
 
-    Layout (wraps for many speakers):
+    Layout:
+        Speaker Names
         [Speaker 0: [______]] [Speaker 1: [______]] ... [Apply]
 
     Hidden when there are no speakers to map.
@@ -29,8 +33,8 @@ class SpeakerMappingPanel(QWidget):
         self.setObjectName("speakerPanel")
 
         self._outer = QVBoxLayout(self)
-        self._outer.setContentsMargins(8, 6, 8, 6)
-        self._outer.setSpacing(6)
+        self._outer.setContentsMargins(12, 8, 12, 8)
+        self._outer.setSpacing(8)
 
         # Header row
         header_row = QHBoxLayout()
@@ -53,7 +57,7 @@ class SpeakerMappingPanel(QWidget):
         self._inputs_widget = QWidget()
         self._inputs_layout = QHBoxLayout(self._inputs_widget)
         self._inputs_layout.setContentsMargins(0, 0, 0, 0)
-        self._inputs_layout.setSpacing(12)
+        self._inputs_layout.setSpacing(16)
         self._outer.addWidget(self._inputs_widget)
 
         self._inputs: dict[str, QLineEdit] = {}  # speaker_id -> QLineEdit
@@ -63,7 +67,6 @@ class SpeakerMappingPanel(QWidget):
         self, speaker_ids: list[str], current_names: dict[str, str]
     ) -> None:
         """Populate the panel with input fields for each speaker ID."""
-        # Clear old inputs
         self._clear_inputs()
         self._inputs.clear()
 
@@ -71,7 +74,6 @@ class SpeakerMappingPanel(QWidget):
             self.setVisible(False)
             return
 
-        # Sort speaker IDs numerically if possible
         def sort_key(sid: str) -> tuple:
             try:
                 return (0, int(sid))
@@ -80,7 +82,7 @@ class SpeakerMappingPanel(QWidget):
 
         for sid in sorted(speaker_ids, key=sort_key):
             pair = QHBoxLayout()
-            pair.setSpacing(4)
+            pair.setSpacing(6)
 
             label = QLabel(f"Speaker {sid}:")
             label.setObjectName("speakerLabel")
@@ -88,9 +90,8 @@ class SpeakerMappingPanel(QWidget):
 
             line = QLineEdit()
             line.setObjectName("speakerInput")
-            line.setPlaceholderText(f"Speaker {sid}")
-            line.setFixedWidth(120)
-            # Pre-fill with saved name
+            line.setPlaceholderText(f"Name...")
+            line.setFixedWidth(130)
             saved = current_names.get(str(sid), "")
             if saved:
                 line.setText(saved)
@@ -126,7 +127,6 @@ class SpeakerMappingPanel(QWidget):
             if item.widget():
                 item.widget().deleteLater()
             elif item.layout():
-                # Recursively delete layout children
                 sub = item.layout()
                 while sub.count():
                     child = sub.takeAt(0)

@@ -1,4 +1,7 @@
-"""Device selector panel for choosing audio input devices."""
+"""Compact device selector panel for choosing audio input devices.
+
+Redesigned with cleaner layout and better visual hierarchy.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +26,7 @@ class DevicePanel(QWidget):
     """Panel with dropdowns for selecting mic and system audio devices.
 
     On Windows, system audio uses WASAPI loopback (PyAudioWPatch) to capture
-    directly from speakers — no virtual audio driver needed. The dropdown
+    directly from speakers -- no virtual audio driver needed. The dropdown
     shows output devices (speakers/headphones) instead of input devices.
 
     On macOS/Linux, falls back to virtual input devices (BlackHole, monitors).
@@ -36,45 +39,41 @@ class DevicePanel(QWidget):
         super().__init__(parent)
 
         self._mic_devices: list[AudioDevice] = []
-        self._auto_detected_device = None  # AudioDevice or loopback_win.OutputDevice
+        self._auto_detected_device = None
         self._auto_use_loopback = False
-        # Manual override devices (OutputDevice on Windows, AudioDevice elsewhere)
         self._manual_devices: list = []
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
 
         # ── Microphone selector ──
-        mic_row = QHBoxLayout()
+        mic_section = QVBoxLayout()
+        mic_section.setSpacing(4)
+
         mic_label = QLabel("Microphone")
         mic_label.setObjectName("deviceLabel")
-        mic_label.setFixedWidth(120)
-        self._mic_combo = QComboBox()
-        self._mic_combo.setMinimumWidth(200)
-        self._mic_combo.currentIndexChanged.connect(self._on_mic_changed)
-        mic_row.addWidget(mic_label)
-        mic_row.addWidget(self._mic_combo, 1)
-        layout.addLayout(mic_row)
+        mic_section.addWidget(mic_label)
 
-        # ── System audio: toggle + auto/manual ──
-        sys_header_row = QHBoxLayout()
-        sys_label = QLabel("System Audio")
-        sys_label.setObjectName("deviceLabel")
-        sys_label.setFixedWidth(120)
+        self._mic_combo = QComboBox()
+        self._mic_combo.currentIndexChanged.connect(self._on_mic_changed)
+        mic_section.addWidget(self._mic_combo)
+
+        layout.addLayout(mic_section)
+
+        # ── System audio toggle ──
+        sys_section = QVBoxLayout()
+        sys_section.setSpacing(4)
 
         self._sys_toggle = QCheckBox("Capture system audio")
         self._sys_toggle.setChecked(False)
         self._sys_toggle.toggled.connect(self._on_sys_toggled)
+        sys_section.addWidget(self._sys_toggle)
 
-        sys_header_row.addWidget(sys_label)
-        sys_header_row.addWidget(self._sys_toggle, 1)
-        layout.addLayout(sys_header_row)
-
-        # Auto-detect status / manual override
+        # Detail area (shown when toggle is on)
         self._sys_detail_widget = QWidget()
         sys_detail_layout = QVBoxLayout(self._sys_detail_widget)
-        sys_detail_layout.setContentsMargins(120, 0, 0, 0)
+        sys_detail_layout.setContentsMargins(20, 4, 0, 0)
         sys_detail_layout.setSpacing(6)
 
         # Status label
@@ -83,25 +82,27 @@ class DevicePanel(QWidget):
         self._sys_status.setWordWrap(True)
         sys_detail_layout.addWidget(self._sys_status)
 
-        # Manual override combo
+        # Manual override
         manual_row = QHBoxLayout()
+        manual_row.setSpacing(8)
         self._sys_manual_check = QCheckBox("Manual:")
         self._sys_manual_check.setChecked(False)
         self._sys_manual_check.toggled.connect(self._on_manual_toggled)
         self._sys_combo = QComboBox()
-        self._sys_combo.setMinimumWidth(200)
         self._sys_combo.setEnabled(False)
         manual_row.addWidget(self._sys_manual_check)
         manual_row.addWidget(self._sys_combo, 1)
         sys_detail_layout.addLayout(manual_row)
 
         self._sys_detail_widget.setVisible(False)
-        layout.addWidget(self._sys_detail_widget)
+        sys_section.addWidget(self._sys_detail_widget)
+
+        layout.addLayout(sys_section)
 
         # ── Refresh button ──
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        self._refresh_btn = QPushButton("Refresh Devices")
+        self._refresh_btn = QPushButton("Refresh")
         self._refresh_btn.setObjectName("refreshBtn")
         self._refresh_btn.clicked.connect(self.refresh_devices)
         btn_row.addWidget(self._refresh_btn)
@@ -144,7 +145,6 @@ class DevicePanel(QWidget):
         self._manual_devices = []
 
         if platform.system() == "Windows" and loopback_win.is_available():
-            # Windows: show OUTPUT devices (speakers) for loopback capture
             outputs = loopback_win.list_output_devices()
             for dev in outputs:
                 label = dev.name
@@ -153,7 +153,6 @@ class DevicePanel(QWidget):
                 self._sys_combo.addItem(label, dev.index)
                 self._manual_devices.append(dev)
         else:
-            # macOS/Linux: show input devices that could be loopback
             for dev in all_input:
                 label = dev.name
                 if dev.is_loopback:
@@ -163,7 +162,9 @@ class DevicePanel(QWidget):
                 self._manual_devices.append(dev)
 
         # ── Auto-detect ──
-        self._auto_detected_device, self._auto_use_loopback = AudioManager.auto_detect_system_device()
+        self._auto_detected_device, self._auto_use_loopback = (
+            AudioManager.auto_detect_system_device()
+        )
         self._update_sys_status()
 
         self._mic_combo.blockSignals(False)
@@ -190,7 +191,6 @@ class DevicePanel(QWidget):
         if not self._sys_toggle.isChecked():
             return False
         if self._sys_manual_check.isChecked():
-            # Manual mode on Windows with loopback devices = loopback
             return platform.system() == "Windows" and loopback_win.is_available()
         return self._auto_use_loopback
 
@@ -213,21 +213,21 @@ class DevicePanel(QWidget):
                 self._sys_status.setText("Select speakers/headphones to capture from")
             else:
                 self._sys_status.setText("Select a virtual audio input device")
-            self._sys_status.setStyleSheet("color: #8888aa;")
+            self._sys_status.setStyleSheet("color: #6b6b80;")
             return
 
         if self._auto_detected_device:
             name = self._auto_detected_device.name
             if self._auto_use_loopback:
-                self._sys_status.setText(f"Auto-detected speakers: {name}")
+                self._sys_status.setText(f"Auto: {name}")
             else:
-                self._sys_status.setText(f"Auto-detected: {name}")
-            self._sys_status.setStyleSheet("color: #4cd964;")
+                self._sys_status.setText(f"Auto: {name}")
+            self._sys_status.setStyleSheet("color: #34d399;")
         else:
             help_text = AudioManager.get_system_audio_help()
             first_line = help_text.split("\n")[0]
             self._sys_status.setText(f"Not available. {first_line}")
-            self._sys_status.setStyleSheet("color: #ff6b6b;")
+            self._sys_status.setStyleSheet("color: #f87171;")
 
     def _on_mic_changed(self, index: int) -> None:
         device_index = self._mic_combo.currentData()

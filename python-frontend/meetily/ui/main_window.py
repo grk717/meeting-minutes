@@ -1,4 +1,14 @@
-"""Main application window with recording controls and UI."""
+"""Main application window with recording controls and UI.
+
+Redesigned with a modern 2-column layout:
+  - Left: Sidebar (meeting history)
+  - Right: Stacked content area
+    - Top: Recording controls OR meeting detail bar
+    - Bottom: Transcript and summary panels side by side
+
+The cramped 3-column layout is replaced with a spacious vertical flow
+that gives each section room to breathe.
+"""
 
 from __future__ import annotations
 
@@ -7,8 +17,7 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal, Slot, QThread, QObject
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtCore import Qt, QTimer, Signal, Slot, QObject
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -20,9 +29,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QGroupBox,
     QSizePolicy,
-    QFrame,
     QSplitter,
 )
 
@@ -88,8 +95,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Meetily")
-        self.setMinimumSize(1100, 600)
-        self.resize(1400, 700)
+        self.setMinimumSize(1100, 650)
+        self.resize(1440, 800)
 
         # Audio manager
         self._audio = AudioManager()
@@ -136,35 +143,9 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
-        root = QVBoxLayout(central)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(12)
-
-        # ── Header row ──
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-
-        header = QLabel("Meetily")
-        header.setObjectName("appTitle")
-        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self._settings_btn = QPushButton("Settings")
-        self._settings_btn.setObjectName("pauseBtn")
-        self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._settings_btn.setFixedWidth(70)
-        self._settings_btn.clicked.connect(self._open_settings)
-
-        header_row.addStretch()
-        header_row.addWidget(header)
-        header_row.addStretch()
-        header_row.addWidget(self._settings_btn)
-
-        root.addLayout(header_row)
-
-        subtitle = QLabel("AI Meeting Assistant")
-        subtitle.setObjectName("appSubtitle")
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(subtitle)
+        root = QHBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
         # ── Sidebar ──
         self._sidebar = Sidebar()
@@ -175,12 +156,42 @@ class MainWindow(QMainWindow):
 
         # ── Main splitter: sidebar | content ──
         self._splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter.setChildrenCollapsible(False)
         self._splitter.addWidget(self._sidebar)
 
+        # ── Right pane (main content) ──
         right_pane = QWidget()
+        right_pane.setStyleSheet("background-color: #0d0d14;")
         right_layout = QVBoxLayout(right_pane)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
+
+        # ── Header bar ──
+        header_bar = QWidget()
+        header_bar.setStyleSheet(
+            "background-color: #0d0d14; border-bottom: 1px solid #1e1e32;"
+        )
+        header_layout = QHBoxLayout(header_bar)
+        header_layout.setContentsMargins(20, 12, 20, 12)
+        header_layout.setSpacing(8)
+
+        app_title = QLabel("Meetily")
+        app_title.setObjectName("appTitle")
+        header_layout.addWidget(app_title)
+
+        subtitle = QLabel("AI Meeting Assistant")
+        subtitle.setObjectName("appSubtitle")
+        header_layout.addWidget(subtitle)
+
+        header_layout.addStretch()
+
+        self._settings_btn = QPushButton("Settings")
+        self._settings_btn.setObjectName("settingsBtn")
+        self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._settings_btn.clicked.connect(self._open_settings)
+        header_layout.addWidget(self._settings_btn)
+
+        right_layout.addWidget(header_bar)
 
         # ── Meeting detail bar (hidden by default) ──
         self._detail_bar = MeetingDetailBar()
@@ -204,133 +215,158 @@ class MainWindow(QMainWindow):
         self._speaker_panel.mapping_applied.connect(self._on_speaker_mapping_applied)
         right_layout.addWidget(self._speaker_panel)
 
-        # ── Three-column horizontal layout ──
-        columns = QHBoxLayout()
-        columns.setSpacing(12)
+        # ── Recording controls section ──
+        self._rec_widget = QWidget()
+        rec_outer = QVBoxLayout(self._rec_widget)
+        rec_outer.setContentsMargins(24, 20, 24, 0)
+        rec_outer.setSpacing(16)
 
-        # ── Column 1: Recording ──
-        rec_column = QVBoxLayout()
-        rec_column.setSpacing(12)
+        # Recording card
+        rec_card = QWidget()
+        rec_card.setObjectName("recordingSection")
+        rec_card.setStyleSheet(
+            "#recordingSection { background-color: #13131f; "
+            "border: 1px solid #1e1e32; border-radius: 12px; }"
+        )
+        rec_card_layout = QVBoxLayout(rec_card)
+        rec_card_layout.setContentsMargins(24, 20, 24, 20)
+        rec_card_layout.setSpacing(16)
 
-        # Meeting name
-        name_group = QGroupBox("Meeting")
-        name_layout = QHBoxLayout(name_group)
-        name_label = QLabel("Name")
-        name_label.setFixedWidth(50)
+        # Meeting name row
+        name_row = QHBoxLayout()
+        name_row.setSpacing(12)
+
+        name_section = QVBoxLayout()
+        name_section.setSpacing(4)
+        name_label = QLabel("Meeting Name")
+        name_label.setObjectName("deviceLabel")
+        name_section.addWidget(name_label)
         self._name_input = QLineEdit()
-        self._name_input.setPlaceholderText("Team Standup, 1-on-1...")
-        name_layout.addWidget(name_label)
-        name_layout.addWidget(self._name_input, 1)
-        rec_column.addWidget(name_group)
+        self._name_input.setPlaceholderText("Team Standup, Sprint Review, 1-on-1...")
+        self._name_input.setObjectName("meetingNameInput")
+        name_section.addWidget(self._name_input)
+        name_row.addLayout(name_section, 1)
 
-        # Device selection
-        device_group = QGroupBox("Audio Devices")
-        device_layout = QVBoxLayout(device_group)
+        rec_card_layout.addLayout(name_row)
+
+        # Device selection (compact)
         self._device_panel = DevicePanel()
-        device_layout.addWidget(self._device_panel)
-        rec_column.addWidget(device_group)
+        rec_card_layout.addWidget(self._device_panel)
 
-        # Recording controls
-        rec_group = QGroupBox("Recording")
-        rec_layout = QVBoxLayout(rec_group)
-        rec_layout.setSpacing(12)
+        # Divider
+        divider = QWidget()
+        divider.setFixedHeight(1)
+        divider.setObjectName("divider")
+        rec_card_layout.addWidget(divider)
 
-        # Level bars
-        bars_container = QWidget()
-        bars_layout = QHBoxLayout(bars_container)
-        bars_layout.setContentsMargins(0, 0, 0, 0)
+        # Recording visualization area
+        viz_area = QWidget()
+        viz_layout = QHBoxLayout(viz_area)
+        viz_layout.setContentsMargins(0, 8, 0, 8)
+        viz_layout.setSpacing(32)
 
+        # Left: Mic level bars + label
         mic_col = QVBoxLayout()
+        mic_col.setSpacing(6)
         self._mic_bars = LevelBarsWidget()
-        self._mic_bars.setFixedSize(60, 80)
-        mic_label = QLabel("Mic")
+        self._mic_bars.setFixedSize(80, 64)
+        mic_label = QLabel("MIC")
         mic_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         mic_label.setObjectName("levelLabel")
         mic_col.addWidget(self._mic_bars, 0, Qt.AlignmentFlag.AlignCenter)
         mic_col.addWidget(mic_label)
 
+        # Center: Duration + status
+        center_col = QVBoxLayout()
+        center_col.setSpacing(4)
+        center_col.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._duration_label = QLabel("00:00")
+        self._duration_label.setObjectName("durationLabel")
+        self._duration_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        center_col.addWidget(self._duration_label)
+
+        self._status_label = QLabel("Ready to record")
+        self._status_label.setObjectName("statusLabel")
+        self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        center_col.addWidget(self._status_label)
+
+        # Right: System level bars + label
         sys_col = QVBoxLayout()
+        sys_col.setSpacing(6)
         self._sys_bars = LevelBarsWidget()
-        self._sys_bars.setFixedSize(60, 80)
-        sys_label = QLabel("System")
+        self._sys_bars.setFixedSize(80, 64)
+        sys_label = QLabel("SYSTEM")
         sys_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sys_label.setObjectName("levelLabel")
         sys_col.addWidget(self._sys_bars, 0, Qt.AlignmentFlag.AlignCenter)
         sys_col.addWidget(sys_label)
 
-        bars_layout.addStretch()
-        bars_layout.addLayout(mic_col)
-        bars_layout.addSpacing(24)
-        bars_layout.addLayout(sys_col)
-        bars_layout.addStretch()
+        viz_layout.addStretch()
+        viz_layout.addLayout(mic_col)
+        viz_layout.addLayout(center_col)
+        viz_layout.addLayout(sys_col)
+        viz_layout.addStretch()
 
-        rec_layout.addWidget(bars_container)
+        rec_card_layout.addWidget(viz_area)
 
-        # Duration
-        self._duration_label = QLabel("00:00")
-        self._duration_label.setObjectName("durationLabel")
-        self._duration_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        rec_layout.addWidget(self._duration_label)
-
-        # Status
-        self._status_label = QLabel("Ready to record")
-        self._status_label.setObjectName("statusLabel")
-        self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        rec_layout.addWidget(self._status_label)
-
-        # Buttons
+        # Action buttons
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(12)
-
-        self._record_btn = QPushButton("Start Recording")
-        self._record_btn.setObjectName("recordBtn")
-        self._record_btn.setMinimumHeight(48)
-        self._record_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._record_btn.clicked.connect(self._toggle_recording)
+        btn_row.setSpacing(10)
 
         self._pause_btn = QPushButton("Pause")
         self._pause_btn.setObjectName("pauseBtn")
-        self._pause_btn.setMinimumHeight(48)
+        self._pause_btn.setMinimumHeight(42)
         self._pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._pause_btn.setVisible(False)
         self._pause_btn.clicked.connect(self._toggle_pause)
+
+        self._record_btn = QPushButton("Start Recording")
+        self._record_btn.setObjectName("recordBtn")
+        self._record_btn.setMinimumHeight(42)
+        self._record_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._record_btn.clicked.connect(self._toggle_recording)
 
         btn_row.addStretch()
         btn_row.addWidget(self._pause_btn)
         btn_row.addWidget(self._record_btn)
         btn_row.addStretch()
 
-        rec_layout.addLayout(btn_row)
+        rec_card_layout.addLayout(btn_row)
 
         # Saved label
         self._saved_label = QLabel("")
         self._saved_label.setObjectName("savedLabel")
         self._saved_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._saved_label.setWordWrap(True)
-        rec_layout.addWidget(self._saved_label)
+        rec_card_layout.addWidget(self._saved_label)
 
-        rec_column.addWidget(rec_group)
-        rec_column.addStretch()
+        rec_outer.addWidget(rec_card)
 
-        # Wrap recording column in a widget for the splitter
-        self._rec_widget = QWidget()
-        self._rec_widget.setLayout(rec_column)
+        right_layout.addWidget(self._rec_widget)
 
-        # ── Column 2: Transcript ──
+        # ── Content area: Transcript + Summary side by side ──
+        content_area = QWidget()
+        content_layout = QHBoxLayout(content_area)
+        content_layout.setContentsMargins(24, 16, 24, 24)
+        content_layout.setSpacing(16)
+
+        # Transcript panel
         self._transcript_panel = TranscriptPanel()
+        self._transcript_panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        content_layout.addWidget(self._transcript_panel, 3)
 
-        # ── Column 3: Summary ──
+        # Summary panel
         self._summary_panel = SummaryPanel()
         self._summary_panel.generate_requested.connect(self._on_generate_summary)
+        self._summary_panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        content_layout.addWidget(self._summary_panel, 2)
 
-        # Add columns
-        columns.addWidget(self._rec_widget, 1)
-        columns.addWidget(self._transcript_panel, 1)
-        columns.addWidget(self._summary_panel, 1)
-
-        columns_widget = QWidget()
-        columns_widget.setLayout(columns)
-        right_layout.addWidget(columns_widget, 1)
+        right_layout.addWidget(content_area, 1)
 
         self._splitter.addWidget(right_pane)
         self._splitter.setStretchFactor(0, 0)  # sidebar: fixed
@@ -435,7 +471,7 @@ class MainWindow(QMainWindow):
             self._toasts.success(f"Recording saved: {saved_path.name}")
         else:
             self._saved_label.setText("Recording discarded (too short or empty)")
-            self._toasts.warning("Recording too short or empty — not saved")
+            self._toasts.warning("Recording too short or empty -- not saved")
 
         # Enable generate button whenever we have a transcript
         if transcript:
@@ -609,7 +645,6 @@ class MainWindow(QMainWindow):
             try:
                 self._db.update_summary(db_id, summary)
                 self._refresh_sidebar()
-                # Refresh the detail meeting object so export sees the summary
                 if self._current_detail_meeting and self._current_detail_meeting.id == db_id:
                     self._current_detail_meeting = self._db.get_meeting(db_id)
             except Exception as e:
@@ -822,7 +857,6 @@ class MainWindow(QMainWindow):
             return
 
         # Convert API segments to 3-tuples: (MM:SS, text, speaker_id)
-        # Backend returns capitalized keys: Start, End, Content, Speaker
         converted_segments = []
         speaker_ids = set()
         for seg in segments:
@@ -854,7 +888,7 @@ class MainWindow(QMainWindow):
         if not full_text:
             full_text = transcript
 
-        # Update DB (store 3-tuples with speaker IDs for re-mapping)
+        # Update DB
         try:
             self._db.update_transcript(meeting.id, full_text, converted_segments)
             self._current_detail_meeting = self._db.get_meeting(meeting.id)
