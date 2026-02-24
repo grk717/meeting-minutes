@@ -325,32 +325,40 @@ QCheckBox::indicator:disabled {
 }
 
 /* ================================================================
-   BUTTONS
+   BUTTONS — all buttons share the same base style
+   (matching #sidebarNewBtn exactly)
    ================================================================ */
 
 QPushButton {
-    background-color: #1a1a2a;
-    color: #a0a0b8;
+    background-color: #1a1a2e;
+    color: #8080a0;
     border: 1px solid #2a2a42;
     border-radius: 8px;
-    padding: 10px 24px;
+    padding: 8px 16px;
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.2px;
 }
 
 QPushButton:hover {
-    background-color: #252540;
-    color: #e0e0f0;
+    background-color: #222238;
+    color: #b0b0c4;
     border-color: #3a3a58;
 }
 
 QPushButton:pressed {
     background-color: #13131f;
-    color: #a0a0b8;
+    color: #8080a0;
+    border-color: #2a2a42;
 }
 
-/* Primary action button (record, generate) */
+QPushButton:disabled {
+    background-color: #111120;
+    color: #3a3a4e;
+    border: 1px solid #1a1a2a;
+}
+
+/* Record button — indigo fill, the one accent exception */
 #recordBtn {
     background-color: #6366f1;
     color: #ffffff;
@@ -371,7 +379,7 @@ QPushButton:pressed {
     border: none;
 }
 
-/* Stop recording button */
+/* Stop button — red fill */
 #stopBtn {
     background-color: #ef4444;
     color: #ffffff;
@@ -392,105 +400,27 @@ QPushButton:pressed {
     border: none;
 }
 
-/* Secondary button (pause, back, export) */
+/* Size-only overrides (colors inherited from base QPushButton) */
 #pauseBtn {
-    background-color: #1a1a2a;
-    color: #a0a0b8;
-    border: 1px solid #2a2a42;
     min-width: 80px;
 }
 
-#pauseBtn:hover {
-    background-color: #2a2a44;
-    color: #f0f0f5;
-    border-color: #4a4a68;
-}
-
-#pauseBtn:pressed {
-    background-color: #13131f;
-    color: #a0a0b8;
-}
-
-/* Refresh / subtle button */
 #refreshBtn {
-    background-color: #1a1a2e;
-    color: #8080a0;
     font-size: 11px;
     font-weight: 500;
     padding: 5px 12px;
-    border: 1px solid #2a2a42;
     border-radius: 6px;
 }
 
-#refreshBtn:hover {
-    background-color: #222238;
-    color: #b0b0c4;
-    border-color: #3a3a58;
-}
-
-#refreshBtn:pressed {
-    background-color: #13131f;
-    color: #8080a0;
-    border-color: #2a2a42;
-}
-
-/* Generate summary button */
-#generateBtn {
-    background-color: #1a1a2e;
-    color: #8080a0;
-    border: 1px solid #2a2a42;
-    border-radius: 8px;
-    padding: 10px 20px;
-    font-weight: 600;
-    font-size: 13px;
-}
-
-#generateBtn:hover {
-    background-color: #222238;
-    color: #b0b0c4;
-    border-color: #3a3a58;
-}
-
-#generateBtn:pressed {
-    background-color: #13131f;
-    color: #8080a0;
-    border-color: #2a2a42;
-}
-
-#generateBtn:disabled {
-    background-color: #111120;
-    color: #3a3a4e;
-    border: 1px solid #1a1a2a;
-}
-
-/* Settings button */
 #settingsBtn {
-    background-color: #1a1a2e;
-    color: #8080a0;
-    border: 1px solid #2a2a42;
-    border-radius: 8px;
     padding: 6px 14px;
     font-size: 12px;
     font-weight: 500;
     min-width: 0;
 }
 
-#settingsBtn:hover {
-    background-color: #222238;
-    color: #b0b0c4;
-    border-color: #3a3a58;
-}
-
-#settingsBtn:pressed {
-    background-color: #13131f;
-    color: #8080a0;
-    border-color: #2a2a42;
-}
-
-QPushButton:disabled {
-    background-color: #13131f;
-    color: #3a3a4e;
-    border: 1px solid #1a1a2a;
+#generateBtn {
+    padding: 8px 20px;
 }
 
 /* ================================================================
@@ -538,25 +468,9 @@ QSplitter::handle {
 }
 
 #sidebarNewBtn {
-    background-color: #1a1a2e;
-    color: #8080a0;
-    border: 1px solid #2a2a42;
-    border-radius: 8px;
     padding: 8px 0;
     font-size: 12px;
-    font-weight: 600;
     min-width: 0;
-    letter-spacing: 0.2px;
-}
-
-#sidebarNewBtn:hover {
-    background-color: #222238;
-    color: #b0b0c4;
-    border-color: #3a3a58;
-}
-
-#sidebarNewBtn:pressed {
-    background-color: #13131f;
 }
 
 /* Meeting list item */
@@ -634,56 +548,16 @@ MeetingListItem:hover {
     color: #6b6b80;
 }
 
-#detailActionBtn {
-    background-color: #1a1a2e;
-    color: #8080a0;
-    border: 1px solid #2a2a42;
-    border-radius: 6px;
-    padding: 5px 12px;
-    font-size: 12px;
-    font-weight: 500;
-    min-width: 0;
-}
-
-#detailActionBtn:hover {
-    background-color: #222238;
-    color: #b0b0c4;
-    border-color: #3a3a58;
-}
-
-#detailActionBtn:pressed {
-    background-color: #13131f;
-    color: #8080a0;
-    border-color: #2a2a42;
-}
-
+#detailActionBtn,
 #detailPrimaryBtn {
-    background-color: #1a1a2e;
-    color: #8080a0;
-    border: 1px solid #2a2a42;
     border-radius: 6px;
     padding: 5px 12px;
     font-size: 12px;
-    font-weight: 600;
     min-width: 0;
 }
 
-#detailPrimaryBtn:hover {
-    background-color: #222238;
-    color: #b0b0c4;
-    border-color: #3a3a58;
-}
-
-#detailPrimaryBtn:pressed {
-    background-color: #13131f;
-    color: #8080a0;
-    border-color: #2a2a42;
-}
-
-#detailPrimaryBtn:disabled {
-    background-color: #111120;
-    color: #3a3a4e;
-    border: 1px solid #1a1a2a;
+#detailActionBtn {
+    font-weight: 500;
 }
 
 /* ================================================================
@@ -829,26 +703,10 @@ MeetingListItem:hover {
 }
 
 #speakerApplyBtn {
-    background-color: #1a1a2e;
-    color: #8080a0;
-    border: 1px solid #2a2a42;
     border-radius: 6px;
     padding: 5px 14px;
     font-size: 12px;
-    font-weight: 600;
     min-width: 0;
-}
-
-#speakerApplyBtn:hover {
-    background-color: #222238;
-    color: #b0b0c4;
-    border-color: #3a3a58;
-}
-
-#speakerApplyBtn:pressed {
-    background-color: #13131f;
-    color: #8080a0;
-    border-color: #2a2a42;
 }
 
 /* ================================================================
@@ -975,21 +833,8 @@ QMessageBox QLabel {
 }
 
 QMessageBox QPushButton {
-    background-color: #1a1a2a;
-    color: #f0f0f5;
     min-width: 80px;
     padding: 8px 16px;
-    border: 1px solid #2a2a42;
-}
-
-QMessageBox QPushButton:hover {
-    background-color: #2a2a44;
-    color: #f0f0f5;
-    border-color: #4a4a68;
-}
-
-QMessageBox QPushButton:pressed {
-    background-color: #13131f;
 }
 
 /* ================================================================
