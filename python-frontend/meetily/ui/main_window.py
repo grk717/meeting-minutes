@@ -766,14 +766,23 @@ class MainWindow(QMainWindow):
             self._retranscribe_widget.reset()
             return
 
-        # Convert API segments [{start, end, text}] to [(MM:SS, text)]
+        # Convert API segments [{start, end, text, speaker}] to [(MM:SS, text)]
         converted_segments = []
         for seg in segments:
-            start = seg.get("start", 0.0) if isinstance(seg, dict) else 0.0
-            text = seg.get("text", "") if isinstance(seg, dict) else str(seg)
+            if not isinstance(seg, dict):
+                continue
+            text = seg.get("text", "").strip()
+            # Skip silence segments
+            if not text or text == "[Silence]":
+                continue
+            start = seg.get("start", 0.0)
+            speaker = seg.get("speaker", "")
             mins = int(start) // 60
             secs = int(start) % 60
-            converted_segments.append((f"{mins:02d}:{secs:02d}", text.strip()))
+            # Prefix with speaker label if present
+            if speaker != "" and speaker is not None:
+                text = f"Speaker {speaker}: {text}"
+            converted_segments.append((f"{mins:02d}:{secs:02d}", text))
 
         # Build full transcript text from segments
         full_text = "\n".join(
