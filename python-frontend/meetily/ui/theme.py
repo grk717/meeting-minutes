@@ -528,19 +528,10 @@ QSplitter::handle {
     border: none;
 }
 
-/* Meeting list item card borders */
-MeetingListItem {
-    border-bottom: 1px solid #1e1e32;
-    border-radius: 0;
-    padding: 2px 0;
-}
-
 /* Selected sidebar item uses dynamic property */
 MeetingListItem[selected="true"] {
     background-color: #1a1a32;
-    border-left: 3px solid #6366f1;
-    border-bottom: 1px solid #1e1e32;
-    border-radius: 0;
+    border-radius: 6px;
 }
 
 MeetingListItem[selected="true"] #sidebarItemName {
@@ -549,13 +540,7 @@ MeetingListItem[selected="true"] #sidebarItemName {
 
 MeetingListItem:hover {
     background-color: #141424;
-    border-left: 3px solid #2a2a42;
-    border-bottom: 1px solid #1e1e32;
-    border-radius: 0;
-}
-
-MeetingListItem[selected="true"]:hover {
-    border-left: 3px solid #6366f1;
+    border-radius: 6px;
 }
 
 /* ================================================================

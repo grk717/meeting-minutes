@@ -9,7 +9,9 @@ from __future__ import annotations
 import logging
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -31,6 +33,9 @@ class MeetingListItem(QWidget):
     clicked = Signal(int)
     delete_requested = Signal(int)
 
+    # Max text width for eliding (sidebar is 260px minus margins)
+    _TEXT_MAX_WIDTH = 210
+
     def __init__(self, meeting: Meeting, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._meeting_id = meeting.id
@@ -45,11 +50,11 @@ class MeetingListItem(QWidget):
         top_row.setContentsMargins(0, 0, 0, 0)
         top_row.setSpacing(4)
 
-        self._name_label = QLabel(meeting.name or "Untitled Meeting")
+        name_text = meeting.name or "Untitled Meeting"
+        self._name_label = QLabel(name_text)
         self._name_label.setObjectName("sidebarItemName")
         self._name_label.setWordWrap(False)
-        # Elide long names
-        self._name_label.setMaximumWidth(180)
+        self._name_label.setMaximumWidth(self._TEXT_MAX_WIDTH)
         top_row.addWidget(self._name_label, 1)
 
         self._delete_btn = QPushButton("\u00d7")
@@ -74,32 +79,33 @@ class MeetingListItem(QWidget):
             meta_parts.append(date_str)
         if duration_mins > 0:
             meta_parts.append(f"{duration_mins}m")
-        # Add summary indicator
         if meeting.summary_text:
             meta_parts.append("Summarized")
 
         meta_label = QLabel("  \u00b7  ".join(meta_parts))
         meta_label.setObjectName("sidebarItemMeta")
+        meta_label.setMaximumWidth(self._TEXT_MAX_WIDTH)
         layout.addWidget(meta_label)
 
-        # Transcript preview (first 60 chars)
+        # Transcript preview (first line, elided)
         preview_text = ""
         if meeting.transcript_text:
-            # Get first meaningful line
             lines = [l.strip() for l in meeting.transcript_text.split("\n") if l.strip()]
             if lines:
                 raw = lines[0]
-                # Strip timestamp prefix if present
                 if raw.startswith("[") and "]" in raw:
                     raw = raw[raw.index("]") + 1:].strip()
-                preview_text = raw[:65]
-                if len(raw) > 65:
-                    preview_text += "..."
+                preview_text = raw[:80]
 
         if preview_text:
-            preview_label = QLabel(preview_text)
+            preview_label = QLabel()
             preview_label.setObjectName("sidebarItemPreview")
             preview_label.setWordWrap(False)
+            preview_label.setMaximumWidth(self._TEXT_MAX_WIDTH)
+            # Elide with font metrics
+            fm = QFontMetrics(preview_label.font())
+            elided = fm.elidedText(preview_text, Qt.TextElideMode.ElideRight, self._TEXT_MAX_WIDTH)
+            preview_label.setText(elided)
             layout.addWidget(preview_label)
 
     def set_selected(self, selected: bool) -> None:
@@ -199,6 +205,14 @@ class Sidebar(QWidget):
         self._items: list[MeetingListItem] = []
         self._selected_id: int | None = None
 
+    @staticmethod
+    def _make_separator() -> QFrame:
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background-color: #1e1e32; border: none;")
+        return sep
+
     def populate(self, meetings: list[Meeting]) -> None:
         """Rebuild the meeting list from a list of Meeting objects."""
         self._list_container.setUpdatesEnabled(False)
@@ -213,7 +227,7 @@ class Sidebar(QWidget):
             if child.widget():
                 child.widget().deleteLater()
 
-        for meeting in meetings:
+        for i, meeting in enumerate(meetings):
             item = MeetingListItem(meeting)
             item.clicked.connect(self._on_item_clicked)
             item.delete_requested.connect(self.meeting_deleted.emit)
@@ -222,6 +236,11 @@ class Sidebar(QWidget):
             idx = self._list_layout.count() - 1  # before stretch
             self._list_layout.insertWidget(idx, item)
             self._items.append(item)
+            # Add separator after each item except the last
+            if i < len(meetings) - 1:
+                sep = self._make_separator()
+                idx = self._list_layout.count() - 1
+                self._list_layout.insertWidget(idx, sep)
 
         self._list_container.setUpdatesEnabled(True)
 
