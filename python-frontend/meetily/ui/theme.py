@@ -43,13 +43,13 @@ DARK_THEME = """
 QMainWindow {
     background-color: #0d0d14;
     color: #f0f0f5;
-    font-family: -apple-system, "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+    font-family: "Inter", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
 }
 
 QWidget {
     color: #f0f0f5;
-    font-family: -apple-system, "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+    font-family: "Inter", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
 }
 
@@ -134,7 +134,7 @@ QScrollBar::sub-page:horizontal {
     font-size: 44px;
     font-weight: 200;
     color: #f0f0f5;
-    font-family: "SF Mono", "Cascadia Mono", "JetBrains Mono", "Consolas", monospace;
+    font-family: "JetBrains Mono", "SF Mono", "Cascadia Mono", "Consolas", monospace;
     letter-spacing: 2px;
 }
 
@@ -325,7 +325,9 @@ QCheckBox::indicator:disabled {
    ================================================================ */
 
 QPushButton {
-    border: none;
+    background-color: #1a1a2a;
+    color: #a0a0b8;
+    border: 1px solid #2a2a42;
     border-radius: 8px;
     padding: 10px 24px;
     font-size: 13px;
@@ -333,36 +335,57 @@ QPushButton {
     letter-spacing: 0.2px;
 }
 
+QPushButton:hover {
+    background-color: #252540;
+    color: #e0e0f0;
+    border-color: #3a3a58;
+}
+
+QPushButton:pressed {
+    background-color: #13131f;
+    color: #a0a0b8;
+}
+
 /* Primary action button (record, generate) */
 #recordBtn {
     background-color: #6366f1;
     color: #ffffff;
+    border: none;
     min-width: 160px;
     border-radius: 10px;
 }
 
 #recordBtn:hover {
-    background-color: #7c7ff7;
+    background-color: #818cf8;
+    color: #ffffff;
+    border: none;
 }
 
 #recordBtn:pressed {
     background-color: #4f46e5;
+    color: #ffffff;
+    border: none;
 }
 
 /* Stop recording button */
 #stopBtn {
     background-color: #ef4444;
     color: #ffffff;
+    border: none;
     min-width: 160px;
     border-radius: 10px;
 }
 
 #stopBtn:hover {
     background-color: #f87171;
+    color: #ffffff;
+    border: none;
 }
 
 #stopBtn:pressed {
     background-color: #dc2626;
+    color: #ffffff;
+    border: none;
 }
 
 /* Secondary button (pause, back, export) */
@@ -374,13 +397,14 @@ QPushButton {
 }
 
 #pauseBtn:hover {
-    background-color: #222238;
+    background-color: #2a2a44;
     color: #f0f0f5;
-    border-color: #3a3a58;
+    border-color: #4a4a68;
 }
 
 #pauseBtn:pressed {
     background-color: #13131f;
+    color: #a0a0b8;
 }
 
 /* Refresh / subtle button */
@@ -395,15 +419,21 @@ QPushButton {
 }
 
 #refreshBtn:hover {
-    background-color: #1a1a2a;
+    background-color: #222238;
+    color: #e0e0f0;
+    border-color: #4a4a68;
+}
+
+#refreshBtn:pressed {
+    background-color: #13131f;
     color: #a0a0b8;
-    border-color: #2a2a42;
 }
 
 /* Generate summary button */
 #generateBtn {
     background-color: #6366f1;
     color: #ffffff;
+    border: none;
     border-radius: 8px;
     padding: 10px 20px;
     font-weight: 600;
@@ -411,16 +441,21 @@ QPushButton {
 }
 
 #generateBtn:hover {
-    background-color: #7c7ff7;
+    background-color: #818cf8;
+    color: #ffffff;
+    border: none;
 }
 
 #generateBtn:pressed {
     background-color: #4f46e5;
+    color: #ffffff;
+    border: none;
 }
 
 #generateBtn:disabled {
     background-color: #1a1a2a;
     color: #3a3a4e;
+    border: 1px solid #1e1e32;
 }
 
 /* Settings button */
@@ -436,15 +471,20 @@ QPushButton {
 }
 
 #settingsBtn:hover {
-    background-color: #1a1a2a;
+    background-color: #222238;
+    color: #e0e0f0;
+    border-color: #4a4a68;
+}
+
+#settingsBtn:pressed {
+    background-color: #13131f;
     color: #a0a0b8;
-    border-color: #2a2a42;
 }
 
 QPushButton:disabled {
     background-color: #13131f;
     color: #3a3a4e;
-    border-color: #1a1a2a;
+    border: 1px solid #1a1a2a;
 }
 
 /* ================================================================
@@ -466,9 +506,9 @@ QSplitter::handle {
 }
 
 #sidebarTitle {
-    font-size: 13px;
-    font-weight: 700;
-    color: #6b6b80;
+    font-size: 11px;
+    font-weight: 600;
+    color: #505068;
     text-transform: uppercase;
     letter-spacing: 1.5px;
 }
@@ -492,9 +532,9 @@ QSplitter::handle {
 }
 
 #sidebarNewBtn {
-    background-color: #6366f1;
-    color: #ffffff;
-    border: none;
+    background-color: #1a1a2e;
+    color: #8080a0;
+    border: 1px solid #2a2a42;
     border-radius: 8px;
     padding: 8px 0;
     font-size: 12px;
@@ -504,17 +544,19 @@ QSplitter::handle {
 }
 
 #sidebarNewBtn:hover {
-    background-color: #7c7ff7;
+    background-color: #222238;
+    color: #b0b0c4;
+    border-color: #3a3a58;
 }
 
 #sidebarNewBtn:pressed {
-    background-color: #4f46e5;
+    background-color: #13131f;
 }
 
 /* Meeting list item */
 #sidebarItemName {
     font-size: 13px;
-    color: #f0f0f5;
+    color: #b0b0c4;
     font-weight: 500;
 }
 
@@ -525,12 +567,12 @@ QSplitter::handle {
 
 #sidebarItemPreview {
     font-size: 11px;
-    color: #6b6b80;
+    color: #505068;
 }
 
 #sidebarDeleteBtn {
     background-color: transparent;
-    color: #6b6b80;
+    color: #505068;
     border: none;
     font-size: 12px;
     font-weight: bold;
@@ -551,12 +593,16 @@ QSplitter::handle {
 
 /* Selected sidebar item uses dynamic property */
 MeetingListItem[selected="true"] {
-    background-color: #1a1a30;
+    background-color: #1a1a32;
     border-radius: 8px;
 }
 
+MeetingListItem[selected="true"] #sidebarItemName {
+    color: #e0e0f0;
+}
+
 MeetingListItem:hover {
-    background-color: #161626;
+    background-color: #141424;
     border-radius: 8px;
 }
 
@@ -594,9 +640,14 @@ MeetingListItem:hover {
 }
 
 #detailActionBtn:hover {
-    background-color: #1a1a2a;
+    background-color: #252540;
     color: #f0f0f5;
-    border-color: #3a3a58;
+    border-color: #4a4a68;
+}
+
+#detailActionBtn:pressed {
+    background-color: #13131f;
+    color: #a0a0b8;
 }
 
 #detailPrimaryBtn {
@@ -611,7 +662,15 @@ MeetingListItem:hover {
 }
 
 #detailPrimaryBtn:hover {
-    background-color: #7c7ff7;
+    background-color: #818cf8;
+    color: #ffffff;
+    border: none;
+}
+
+#detailPrimaryBtn:pressed {
+    background-color: #4f46e5;
+    color: #ffffff;
+    border: none;
 }
 
 #detailPrimaryBtn:disabled {
@@ -648,7 +707,7 @@ MeetingListItem:hover {
 #transcriptTimestamp {
     font-size: 10px;
     color: #4a4a5e;
-    font-family: "SF Mono", "Cascadia Mono", "JetBrains Mono", "Consolas", monospace;
+    font-family: "JetBrains Mono", "SF Mono", "Cascadia Mono", "Consolas", monospace;
     font-weight: 500;
 }
 
@@ -783,71 +842,73 @@ MeetingListItem:hover {
 #toast {
     border-radius: 10px;
     border: 1px solid #2a2a42;
-    padding: 4px;
+    padding: 12px 14px;
+    min-height: 36px;
 }
 
 #toast[toastType="success"] {
-    background-color: rgba(52, 211, 153, 0.08);
-    border-color: rgba(52, 211, 153, 0.2);
+    background-color: rgba(52, 211, 153, 0.18);
+    border-color: rgba(52, 211, 153, 0.35);
 }
 
 #toast[toastType="error"] {
-    background-color: rgba(248, 113, 113, 0.08);
-    border-color: rgba(248, 113, 113, 0.2);
+    background-color: rgba(248, 113, 113, 0.18);
+    border-color: rgba(248, 113, 113, 0.35);
 }
 
 #toast[toastType="warning"] {
-    background-color: rgba(251, 191, 36, 0.08);
-    border-color: rgba(251, 191, 36, 0.2);
+    background-color: rgba(251, 191, 36, 0.18);
+    border-color: rgba(251, 191, 36, 0.35);
 }
 
 #toast[toastType="info"] {
-    background-color: rgba(96, 165, 250, 0.08);
-    border-color: rgba(96, 165, 250, 0.2);
+    background-color: rgba(96, 165, 250, 0.18);
+    border-color: rgba(96, 165, 250, 0.35);
 }
 
 #toastIconSuccess {
     color: #34d399;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: bold;
 }
 
 #toastIconError {
     color: #f87171;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: bold;
 }
 
 #toastIconWarning {
     color: #fbbf24;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: bold;
 }
 
 #toastIconInfo {
     color: #60a5fa;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: bold;
 }
 
 #toastMessage {
-    color: #c8c8d8;
-    font-size: 12px;
+    color: #f0f0f5;
+    font-size: 13px;
+    font-weight: 500;
 }
 
 #toastCloseBtn {
     background-color: transparent;
-    color: #4a4a5e;
+    color: #6b6b80;
     border: none;
-    font-size: 11px;
-    padding: 0;
+    font-size: 13px;
+    padding: 2px;
     min-width: 0;
     border-radius: 4px;
 }
 
 #toastCloseBtn:hover {
-    color: #a0a0b8;
-    background-color: rgba(255, 255, 255, 0.05);
+    color: #f0f0f5;
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* ================================================================
@@ -906,8 +967,13 @@ QMessageBox QPushButton {
 }
 
 QMessageBox QPushButton:hover {
-    background-color: #222238;
-    border-color: #3a3a58;
+    background-color: #2a2a44;
+    color: #f0f0f5;
+    border-color: #4a4a68;
+}
+
+QMessageBox QPushButton:pressed {
+    background-color: #13131f;
 }
 
 /* ================================================================

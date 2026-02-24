@@ -49,25 +49,26 @@ class Toast(QFrame):
         self.setFixedWidth(360)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(16, 12, 12, 12)
+        layout.setSpacing(12)
 
         # Icon
         icon_label = QLabel(_ICONS.get(toast_type, ""))
         icon_label.setObjectName(f"toastIcon{toast_type.value.title()}")
-        icon_label.setFixedWidth(18)
+        icon_label.setFixedWidth(22)
         layout.addWidget(icon_label)
 
         # Message
         msg_label = QLabel(message)
         msg_label.setObjectName("toastMessage")
         msg_label.setWordWrap(True)
+        msg_label.setMinimumHeight(20)
         layout.addWidget(msg_label, 1)
 
         # Close button
         close_btn = QPushButton("\u2715")
         close_btn.setObjectName("toastCloseBtn")
-        close_btn.setFixedSize(20, 20)
+        close_btn.setFixedSize(24, 24)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.clicked.connect(self._dismiss)
         layout.addWidget(close_btn)
