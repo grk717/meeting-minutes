@@ -243,6 +243,34 @@ python-frontend/
 - Export .md: Markdown with headers, bulleted transcript segments, summary section
 - DB closed on app exit
 
+### Phase 5.5: Queued Full-Audio Retranscription — DONE
+
+**Problem**: Live transcription (VAD + small Whisper) produces choppy segments. Users want to send the full WAV to a better ASR model for high-quality retranscription.
+
+**Backend API spec** (for separate implementation, see plan file):
+- `POST /api/transcribe` — submit WAV + ASR config, returns `{job_id, status, queue_position}`
+- `GET /api/transcribe/{job_id}/status` — poll job: queued/processing/completed/failed
+- `DELETE /api/transcribe/{job_id}` — cancel job
+
+**Desktop app implementation:**
+
+#### `meetily/transcription/retranscribe_client.py` — HTTP client
+- `RetranscribeClient(backend_url)` with `submit()`, `poll_status()`, `cancel()` methods
+- Sends WAV as multipart upload, polls for status
+
+#### `meetily/ui/retranscribe_widget.py` — progress widget
+- `RetranscribeWidget(QWidget)`: inline status label + cancel button
+- Submits job in background thread, polls via QTimer (2s interval)
+- Shows: "Uploading..." → "Queued (pos N)..." → "Transcribing... N%" → "Complete!"
+- Signals: `completed(transcript, segments)`, `failed(error)`, `cancelled()`
+
+#### Modified files:
+- `ui/meeting_detail.py` — added "Retranscribe" button (enabled only when WAV exists)
+- `ui/settings_dialog.py` — added `backend_url` setting (default `http://localhost:5167`)
+- `storage/database.py` — added `update_transcript(id, text, segments)` method
+- `ui/main_window.py` — wired retranscribe flow: submit → poll → update DB + UI
+- `ui/theme.py` — added `#retranscribeStatus` style
+
 ### Phase 6: Settings & Polish — TODO
 
 - Settings panel: API keys, provider selection, audio preferences

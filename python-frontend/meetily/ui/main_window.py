@@ -33,6 +33,7 @@ from meetily.transcription import TranscriptionManager
 from meetily.ui.device_panel import DevicePanel
 from meetily.ui.level_bars import LevelBarsWidget
 from meetily.ui.meeting_detail import MeetingDetailBar
+from meetily.ui.retranscribe_widget import RetranscribeWidget
 from meetily.ui.settings_dialog import SettingsDialog
 from meetily.ui.sidebar import Sidebar
 from meetily.ui.summary_panel import SummaryPanel
@@ -177,10 +178,18 @@ class MainWindow(QMainWindow):
         self._detail_bar = MeetingDetailBar()
         self._detail_bar.setVisible(False)
         self._detail_bar.back_requested.connect(self._show_recording_view)
+        self._detail_bar.retranscribe_requested.connect(self._on_retranscribe_requested)
         self._detail_bar.copy_requested.connect(self._on_copy_meeting)
         self._detail_bar.export_txt_requested.connect(self._on_export_txt)
         self._detail_bar.export_md_requested.connect(self._on_export_md)
         right_layout.addWidget(self._detail_bar)
+
+        # ── Retranscribe progress widget (hidden by default) ──
+        self._retranscribe_widget = RetranscribeWidget()
+        self._retranscribe_widget.completed.connect(self._on_retranscribe_completed)
+        self._retranscribe_widget.failed.connect(self._on_retranscribe_failed)
+        self._retranscribe_widget.cancelled.connect(self._on_retranscribe_cancelled)
+        right_layout.addWidget(self._retranscribe_widget)
 
         # ── Three-column horizontal layout ──
         columns = QHBoxLayout()
@@ -643,6 +652,7 @@ class MainWindow(QMainWindow):
         self._current_detail_meeting = None
         self._rec_widget.setVisible(True)
         self._detail_bar.setVisible(False)
+        self._retranscribe_widget.reset()
         self._sidebar.set_selected(None)
 
         if self._audio.state == RecordingState.IDLE:
@@ -711,6 +721,96 @@ class MainWindow(QMainWindow):
             if meeting.summary_text:
                 content += f"\n## Summary\n\n{meeting.summary_text}\n"
             Path(path).write_text(content, encoding="utf-8")
+
+    # ── Retranscription ───────────────────────────────────────────
+
+    def _on_retranscribe_requested(self) -> None:
+        meeting = self._current_detail_meeting
+        if not meeting or not meeting.wav_path:
+            QMessageBox.warning(
+                self,
+                "No Audio File",
+                "This meeting has no audio file to retranscribe.",
+            )
+            return
+
+        wav = Path(meeting.wav_path)
+        if not wav.exists():
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                f"Audio file not found:\n{meeting.wav_path}",
+            )
+            return
+
+        cfg = SettingsDialog.get_settings()
+        if not cfg["backend_url"]:
+            QMessageBox.warning(
+                self,
+                "Backend Not Configured",
+                "Please configure the backend URL in Settings.",
+            )
+            return
+
+        self._retranscribe_widget.start_job(
+            wav_path=meeting.wav_path,
+            meeting_name=meeting.name,
+            asr_url=cfg["asr_url"],
+            asr_api_key=cfg["asr_api_key"],
+            backend_url=cfg["backend_url"],
+        )
+
+    def _on_retranscribe_completed(self, transcript: str, segments: list) -> None:
+        meeting = self._current_detail_meeting
+        if not meeting:
+            self._retranscribe_widget.reset()
+            return
+
+        # Convert API segments [{start, end, text}] to [(MM:SS, text)]
+        converted_segments = []
+        for seg in segments:
+            start = seg.get("start", 0.0) if isinstance(seg, dict) else 0.0
+            text = seg.get("text", "") if isinstance(seg, dict) else str(seg)
+            mins = int(start) // 60
+            secs = int(start) % 60
+            converted_segments.append((f"{mins:02d}:{secs:02d}", text.strip()))
+
+        # Build full transcript text from segments
+        full_text = "\n".join(
+            f"[{ts}]  {text}" for ts, text in converted_segments
+        )
+        if not full_text:
+            full_text = transcript
+
+        # Update DB
+        try:
+            self._db.update_transcript(meeting.id, full_text, converted_segments)
+            self._current_detail_meeting = self._db.get_meeting(meeting.id)
+        except Exception as e:
+            log.error("Failed to save retranscription to DB: %s", e)
+
+        # Refresh transcript panel
+        self._transcript_panel.clear()
+        for ts, text in converted_segments:
+            self._transcript_panel.add_segment(text, ts)
+        if not converted_segments and transcript:
+            self._transcript_panel.add_segment(transcript, "")
+
+        # Enable summary generation with new transcript
+        self._summary_panel.set_generate_enabled(True)
+        self._refresh_sidebar()
+        self._retranscribe_widget.reset()
+
+    def _on_retranscribe_failed(self, error: str) -> None:
+        QMessageBox.warning(
+            self,
+            "Retranscription Failed",
+            f"The retranscription job failed:\n{error}",
+        )
+        self._retranscribe_widget.reset()
+
+    def _on_retranscribe_cancelled(self) -> None:
+        self._retranscribe_widget.reset()
 
     # ── Cleanup ─────────────────────────────────────────────────
 

@@ -365,4 +365,11 @@ MeetingListItem:hover {
     font-weight: 600;
     color: #e0e0e0;
 }
+
+/* ── Retranscribe widget ── */
+#retranscribeStatus {
+    font-size: 12px;
+    color: #a0a0c0;
+    font-style: italic;
+}
 """

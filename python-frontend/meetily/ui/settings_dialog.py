@@ -19,6 +19,7 @@ _DEFAULTS = {
     "llm_url": "http://localhost:11434",
     "llm_api_key": "",
     "llm_model": "gpt-4o-mini",
+    "backend_url": "http://localhost:5167",
 }
 
 
@@ -78,6 +79,20 @@ class SettingsDialog(QDialog):
 
         layout.addLayout(llm_form)
 
+        # Backend section
+        backend_header = QLabel("Backend (retranscription queue)")
+        backend_header.setWordWrap(True)
+        layout.addWidget(backend_header)
+
+        backend_form = QFormLayout()
+        backend_form.setSpacing(10)
+
+        self._backend_url_input = QLineEdit(current["backend_url"])
+        self._backend_url_input.setPlaceholderText("http://localhost:5167")
+        backend_form.addRow("Backend URL:", self._backend_url_input)
+
+        layout.addLayout(backend_form)
+
         # Buttons
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
@@ -93,6 +108,7 @@ class SettingsDialog(QDialog):
         settings.setValue("llm_url", self._llm_url_input.text().strip())
         settings.setValue("llm_api_key", self._llm_key_input.text().strip())
         settings.setValue("llm_model", self._llm_model_input.text().strip())
+        settings.setValue("backend_url", self._backend_url_input.text().strip())
         self.accept()
 
     @staticmethod
@@ -105,4 +121,5 @@ class SettingsDialog(QDialog):
             "llm_url": settings.value("llm_url", _DEFAULTS["llm_url"]),
             "llm_api_key": settings.value("llm_api_key", _DEFAULTS["llm_api_key"]),
             "llm_model": settings.value("llm_model", _DEFAULTS["llm_model"]),
+            "backend_url": settings.value("backend_url", _DEFAULTS["backend_url"]),
         }

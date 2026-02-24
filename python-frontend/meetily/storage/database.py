@@ -99,6 +99,23 @@ class MeetingDatabase:
         )
         self._conn.commit()
 
+    def update_transcript(
+        self,
+        meeting_id: int,
+        transcript_text: str,
+        segments: list[tuple[str, str]],
+    ) -> None:
+        """Replace transcript for a meeting (after retranscription)."""
+        now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        segments_json = json.dumps(segments)
+        self._conn.execute(
+            """UPDATE meetings
+               SET transcript_text = ?, transcript_segments = ?, updated_at = ?
+               WHERE id = ?""",
+            (transcript_text, segments_json, now, meeting_id),
+        )
+        self._conn.commit()
+
     def get_meeting(self, meeting_id: int) -> Meeting | None:
         """Load a single meeting by ID."""
         row = self._conn.execute(

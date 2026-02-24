@@ -12,6 +12,7 @@ class MeetingDetailBar(QWidget):
     """Bar shown above transcript/summary when viewing a stored meeting."""
 
     back_requested = Signal()
+    retranscribe_requested = Signal()
     copy_requested = Signal()
     export_txt_requested = Signal()
     export_md_requested = Signal()
@@ -34,6 +35,13 @@ class MeetingDetailBar(QWidget):
         self._title_label = QLabel("")
         self._title_label.setObjectName("meetingDetailTitle")
         layout.addWidget(self._title_label, 1)
+
+        self._retranscribe_btn = QPushButton("Retranscribe")
+        self._retranscribe_btn.setObjectName("recordBtn")
+        self._retranscribe_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._retranscribe_btn.setFixedWidth(100)
+        self._retranscribe_btn.clicked.connect(self.retranscribe_requested.emit)
+        layout.addWidget(self._retranscribe_btn)
 
         self._copy_btn = QPushButton("Copy")
         self._copy_btn.setObjectName("pauseBtn")
@@ -59,3 +67,5 @@ class MeetingDetailBar(QWidget):
     def set_meeting(self, meeting: Meeting) -> None:
         date_str = meeting.created_at[:10] if meeting.created_at else ""
         self._title_label.setText(f"{meeting.name}  ({date_str})")
+        # Only enable retranscribe if there's a WAV file
+        self._retranscribe_btn.setEnabled(bool(meeting.wav_path))
