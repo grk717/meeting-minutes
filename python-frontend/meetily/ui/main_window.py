@@ -47,6 +47,7 @@ from meetily.ui.speaker_panel import SpeakerMappingPanel
 from meetily.ui.summary_panel import SummaryPanel
 from meetily.ui.toast import ToastManager
 from meetily.ui.transcript_panel import TranscriptPanel
+from meetily.ui.button_style import apply_button_style
 
 log = logging.getLogger(__name__)
 
@@ -187,6 +188,7 @@ class MainWindow(QMainWindow):
 
         self._settings_btn = QPushButton("Settings")
         self._settings_btn.setObjectName("settingsBtn")
+        apply_button_style(self._settings_btn, small=True)
         self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._settings_btn.clicked.connect(self._open_settings)
         header_layout.addWidget(self._settings_btn)
@@ -316,6 +318,7 @@ class MainWindow(QMainWindow):
 
         self._pause_btn = QPushButton("Pause")
         self._pause_btn.setObjectName("pauseBtn")
+        apply_button_style(self._pause_btn)
         self._pause_btn.setMinimumHeight(42)
         self._pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._pause_btn.setVisible(False)
@@ -345,18 +348,23 @@ class MainWindow(QMainWindow):
 
         right_layout.addWidget(self._rec_widget)
 
-        # ── Content area: Transcript + Summary side by side ──
-        content_area = QWidget()
-        content_layout = QHBoxLayout(content_area)
-        content_layout.setContentsMargins(24, 16, 24, 24)
-        content_layout.setSpacing(16)
+        # ── Content area: Transcript + Summary with visible splitter ──
+        content_wrapper = QWidget()
+        content_wrapper_layout = QVBoxLayout(content_wrapper)
+        content_wrapper_layout.setContentsMargins(24, 16, 24, 24)
+        content_wrapper_layout.setSpacing(0)
+
+        self._content_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._content_splitter.setObjectName("contentSplitter")
+        self._content_splitter.setChildrenCollapsible(False)
+        self._content_splitter.setHandleWidth(9)
 
         # Transcript panel
         self._transcript_panel = TranscriptPanel()
         self._transcript_panel.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        content_layout.addWidget(self._transcript_panel, 3)
+        self._content_splitter.addWidget(self._transcript_panel)
 
         # Summary panel
         self._summary_panel = SummaryPanel()
@@ -364,9 +372,14 @@ class MainWindow(QMainWindow):
         self._summary_panel.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        content_layout.addWidget(self._summary_panel, 2)
+        self._content_splitter.addWidget(self._summary_panel)
 
-        right_layout.addWidget(content_area, 1)
+        # Set default 60/40 split
+        self._content_splitter.setStretchFactor(0, 3)
+        self._content_splitter.setStretchFactor(1, 2)
+
+        content_wrapper_layout.addWidget(self._content_splitter)
+        right_layout.addWidget(content_wrapper, 1)
 
         self._splitter.addWidget(right_pane)
         self._splitter.setStretchFactor(0, 0)  # sidebar: fixed

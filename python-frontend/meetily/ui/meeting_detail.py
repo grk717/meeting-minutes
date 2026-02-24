@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from meetily.storage.database import Meeting
+from meetily.ui.button_style import apply_button_style
 
 
 class MeetingDetailBar(QWidget):
@@ -31,6 +32,7 @@ class MeetingDetailBar(QWidget):
         # Back button
         self._back_btn = QPushButton("\u2190 Back")
         self._back_btn.setObjectName("detailActionBtn")
+        apply_button_style(self._back_btn, small=True)
         self._back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._back_btn.setFixedWidth(70)
         self._back_btn.clicked.connect(self.back_requested.emit)
@@ -54,24 +56,28 @@ class MeetingDetailBar(QWidget):
         # Action buttons
         self._retranscribe_btn = QPushButton("Retranscribe")
         self._retranscribe_btn.setObjectName("detailPrimaryBtn")
+        apply_button_style(self._retranscribe_btn, small=True)
         self._retranscribe_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._retranscribe_btn.clicked.connect(self.retranscribe_requested.emit)
         layout.addWidget(self._retranscribe_btn)
 
         self._copy_btn = QPushButton("Copy")
         self._copy_btn.setObjectName("detailActionBtn")
+        apply_button_style(self._copy_btn, small=True)
         self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._copy_btn.clicked.connect(self.copy_requested.emit)
         layout.addWidget(self._copy_btn)
 
         self._export_txt_btn = QPushButton(".txt")
         self._export_txt_btn.setObjectName("detailActionBtn")
+        apply_button_style(self._export_txt_btn, small=True)
         self._export_txt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._export_txt_btn.clicked.connect(self.export_txt_requested.emit)
         layout.addWidget(self._export_txt_btn)
 
         self._export_md_btn = QPushButton(".md")
         self._export_md_btn.setObjectName("detailActionBtn")
+        apply_button_style(self._export_md_btn, small=True)
         self._export_md_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._export_md_btn.clicked.connect(self.export_md_requested.emit)
         layout.addWidget(self._export_md_btn)

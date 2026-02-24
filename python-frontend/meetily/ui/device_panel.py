@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from meetily.audio.manager import AudioDevice, AudioManager
 from meetily.audio import loopback_win
+from meetily.ui.button_style import apply_button_style
 
 
 class DevicePanel(QWidget):
@@ -104,6 +105,7 @@ class DevicePanel(QWidget):
         btn_row.addStretch()
         self._refresh_btn = QPushButton("Refresh")
         self._refresh_btn.setObjectName("refreshBtn")
+        apply_button_style(self._refresh_btn, small=True)
         self._refresh_btn.clicked.connect(self.refresh_devices)
         btn_row.addWidget(self._refresh_btn)
         layout.addLayout(btn_row)

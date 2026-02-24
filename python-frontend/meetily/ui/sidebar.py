@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from meetily.storage.database import Meeting
+from meetily.ui.button_style import apply_button_style
 
 log = logging.getLogger(__name__)
 
@@ -164,6 +165,7 @@ class Sidebar(QWidget):
         # New Meeting button
         self._new_btn = QPushButton("+ New Meeting")
         self._new_btn.setObjectName("sidebarNewBtn")
+        apply_button_style(self._new_btn)
         self._new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._new_btn.clicked.connect(self.new_meeting_requested.emit)
         top_layout.addWidget(self._new_btn)

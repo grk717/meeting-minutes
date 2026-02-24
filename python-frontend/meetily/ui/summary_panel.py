@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from meetily.ui.button_style import apply_button_style
+
 
 class SummaryPanel(QWidget):
     """Displays a generated meeting summary with a generate button."""
@@ -42,6 +44,7 @@ class SummaryPanel(QWidget):
 
         self._generate_btn = QPushButton("Generate")
         self._generate_btn.setObjectName("generateBtn")
+        apply_button_style(self._generate_btn)
         self._generate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._generate_btn.clicked.connect(self.generate_requested.emit)
         self._generate_btn.setEnabled(False)

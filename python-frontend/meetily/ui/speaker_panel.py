@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from meetily.ui.button_style import apply_button_style
+
 
 class SpeakerMappingPanel(QWidget):
     """Compact inline panel showing one input per detected speaker.
@@ -46,6 +48,7 @@ class SpeakerMappingPanel(QWidget):
 
         self._apply_btn = QPushButton("Apply")
         self._apply_btn.setObjectName("speakerApplyBtn")
+        apply_button_style(self._apply_btn, small=True)
         self._apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._apply_btn.setFixedWidth(70)
         self._apply_btn.clicked.connect(self._on_apply)

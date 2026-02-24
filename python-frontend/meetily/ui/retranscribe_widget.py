@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from meetily.transcription.retranscribe_client import RetranscribeClient
+from meetily.ui.button_style import apply_button_style
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class RetranscribeWidget(QWidget):
 
         self._cancel_btn = QPushButton("Cancel")
         self._cancel_btn.setObjectName("detailActionBtn")
+        apply_button_style(self._cancel_btn, small=True)
         self._cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._cancel_btn.clicked.connect(self._on_cancel)
         layout.addWidget(self._cancel_btn)
