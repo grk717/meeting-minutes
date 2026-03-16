@@ -32,6 +32,7 @@ _SYSTEM_PROMPT = (
     "- Be concise. Each bullet should be one clear sentence.\n"
     "- If a section has no items, write 'None.'\n"
     "- Do NOT wrap the output in a code fence. Output raw Markdown directly."
+    "Return summary on russian language."
 )
 
 
