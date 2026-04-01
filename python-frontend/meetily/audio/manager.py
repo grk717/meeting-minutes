@@ -454,9 +454,12 @@ class AudioManager:
         def _do_stop() -> None:
             try:
                 stream.stop()
-                stream.close()
             except Exception as e:
                 log.warning("Error stopping %s stream: %s", name, e)
+            try:
+                stream.close()
+            except Exception as e:
+                log.warning("Error closing %s stream: %s", name, e)
 
         t = threading.Thread(target=_do_stop, daemon=True)
         t.start()

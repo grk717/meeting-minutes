@@ -186,20 +186,23 @@ def test_stop_dead_stream() -> None:
 
     import sounddevice as sd
 
-    # Simulate a stream where stop() raises and close() hangs
+    # Simulate a stream where stop() succeeds but close() hangs forever.
+    # This is the realistic scenario: WASAPI stop() returns OK but
+    # close() blocks waiting on a dead device handle.
     mock_stream = MagicMock(spec=sd.InputStream)
 
     def fake_stop():
-        raise OSError("Device not available")
+        print("  [mock] stop() called — OK")
 
     def fake_close():
         # Simulate a hang — in real life this blocks forever
+        print("  [mock] close() called — hanging...")
         time.sleep(10)
 
     mock_stream.stop = fake_stop
     mock_stream.close = fake_close
 
-    # This is the new _stop_stream logic
+    # This mirrors the production _stop_stream logic
     def stop_stream_with_timeout(name, stream, timeout=3.0):
         if stream is None:
             return
@@ -207,9 +210,12 @@ def test_stop_dead_stream() -> None:
         def _do_stop():
             try:
                 stream.stop()
+            except Exception as e:
+                print(f"  [{name}] Error in stop: {e}")
+            try:
                 stream.close()
             except Exception as e:
-                print(f"  [{name}] Error in stop/close: {e}")
+                print(f"  [{name}] Error in close: {e}")
 
         t = threading.Thread(target=_do_stop, daemon=True)
         t.start()
