@@ -29,6 +29,8 @@ BLOCK_SIZE = 1024  # ~64ms at 16kHz
 LEVEL_SMOOTHING = 0.3  # EMA smoothing for level meter
 LEVEL_UPDATE_INTERVAL = 1.0 / 30  # Throttle level callbacks to ~30fps
 CHUNK_LOG_INTERVAL = 5000  # Log chunk stats every N chunks
+STREAM_WATCHDOG_INTERVAL = 5.0  # Check stream health every N seconds
+STREAM_DEAD_THRESHOLD = 10.0  # Seconds of no data before declaring stream dead
 
 
 class RecordingState(enum.Enum):
@@ -150,6 +152,14 @@ class AudioManager:
         # Level metering (smoothed)
         self._levels = AudioLevels()
         self._last_level_emit: float = 0.0
+
+        # Stream health tracking
+        self._mic_last_data: float = 0.0
+        self._sys_last_data: float = 0.0
+        self._watchdog_thread: threading.Thread | None = None
+        self._watchdog_running = False
+        self._mic_dead_warned = False
+        self._sys_dead_warned = False
 
         # Callbacks
         self.on_levels_updated: Callable[[AudioLevels], None] | None = None
@@ -369,6 +379,7 @@ class AudioManager:
                         target_rate=SAMPLE_RATE,
                     )
                     self._loopback_stream.on_data = self._loopback_data_callback
+                    self._loopback_stream.on_error = self._on_loopback_error
                     self._loopback_stream.start()
                     log.info("WASAPI loopback stream started on output device %d", system_device)
                 except Exception as e:
@@ -392,6 +403,7 @@ class AudioManager:
                     log.warning("Failed to start system audio: %s (continuing with mic only)", e)
                     self._emit_warning("System audio unavailable — recording microphone only")
 
+        self._start_watchdog()
         self._set_state(RecordingState.RECORDING)
 
     def stop_recording(self) -> Path | None:
@@ -402,22 +414,15 @@ class AudioManager:
 
         self._set_state(RecordingState.STOPPING)
 
-        # Stop streams
-        if self._mic_stream is not None:
-            try:
-                self._mic_stream.stop()
-                self._mic_stream.close()
-            except Exception as e:
-                log.warning("Error stopping mic stream: %s", e)
-            self._mic_stream = None
+        # Stop watchdog first
+        self._stop_watchdog()
 
-        if self._sys_stream is not None:
-            try:
-                self._sys_stream.stop()
-                self._sys_stream.close()
-            except Exception as e:
-                log.warning("Error stopping system stream: %s", e)
-            self._sys_stream = None
+        # Stop streams with timeout to handle dead/hung streams
+        self._stop_stream("mic", self._mic_stream)
+        self._mic_stream = None
+
+        self._stop_stream("sys", self._sys_stream)
+        self._sys_stream = None
 
         if self._loopback_stream is not None:
             try:
@@ -436,6 +441,31 @@ class AudioManager:
 
         self._set_state(RecordingState.IDLE)
         return saved_path
+
+    def _stop_stream(self, name: str, stream: sd.InputStream | None) -> None:
+        """Stop and close an audio stream with timeout protection.
+
+        Dead WASAPI streams can hang on stop()/close(). Run in a thread
+        with a timeout to prevent the main thread from freezing.
+        """
+        if stream is None:
+            return
+
+        def _do_stop() -> None:
+            try:
+                stream.stop()
+                stream.close()
+            except Exception as e:
+                log.warning("Error stopping %s stream: %s", name, e)
+
+        t = threading.Thread(target=_do_stop, daemon=True)
+        t.start()
+        t.join(timeout=3.0)
+        if t.is_alive():
+            log.warning(
+                "%s stream stop timed out (3s) — stream may be dead, continuing",
+                name,
+            )
 
     def pause_recording(self) -> None:
         """Pause the current recording."""
@@ -475,6 +505,7 @@ class AudioManager:
         if self._state != RecordingState.RECORDING:
             return
 
+        self._mic_last_data = time.monotonic()
         audio = indata[:, 0].copy()
 
         with self._lock:
@@ -527,6 +558,8 @@ class AudioManager:
         if self._state != RecordingState.RECORDING:
             return
 
+        self._sys_last_data = time.monotonic()
+
         audio = indata[:, 0].copy()
 
         with self._lock:
@@ -571,6 +604,7 @@ class AudioManager:
         if self._state != RecordingState.RECORDING:
             return
 
+        self._sys_last_data = time.monotonic()
         audio_copy = audio.copy()
 
         with self._lock:
@@ -601,21 +635,95 @@ class AudioManager:
             self._last_level_emit = now
             self.on_levels_updated(self._levels)
 
+    def _on_loopback_error(self, message: str) -> None:
+        """Called from the loopback reader thread when the stream fails."""
+        log.warning("Loopback stream error: %s", message)
+        self._emit_warning(message)
+
+    # ── Stream health watchdog ─────────────────────────────────
+
+    def _start_watchdog(self) -> None:
+        """Start a background thread that monitors stream health."""
+        self._watchdog_running = True
+        self._mic_dead_warned = False
+        self._sys_dead_warned = False
+        now = time.monotonic()
+        self._mic_last_data = now
+        self._sys_last_data = now
+        self._watchdog_thread = threading.Thread(
+            target=self._watchdog_loop, daemon=True, name="stream-watchdog"
+        )
+        self._watchdog_thread.start()
+
+    def _stop_watchdog(self) -> None:
+        self._watchdog_running = False
+        if self._watchdog_thread is not None:
+            self._watchdog_thread.join(timeout=STREAM_WATCHDOG_INTERVAL + 1)
+            self._watchdog_thread = None
+
+    def _watchdog_loop(self) -> None:
+        """Periodically check that audio streams are still delivering data."""
+        while self._watchdog_running:
+            time.sleep(STREAM_WATCHDOG_INTERVAL)
+            if not self._watchdog_running or self._state != RecordingState.RECORDING:
+                continue
+
+            now = time.monotonic()
+
+            # Check mic stream
+            if self._mic_stream is not None and not self._mic_dead_warned:
+                gap = now - self._mic_last_data
+                if gap > STREAM_DEAD_THRESHOLD:
+                    self._mic_dead_warned = True
+                    log.warning(
+                        "Mic stream appears dead — no data for %.0fs", gap
+                    )
+                    self._emit_warning(
+                        "Microphone stream stopped receiving data. "
+                        "The device may have disconnected."
+                    )
+
+            # Check system audio stream
+            sys_active = (self._sys_stream is not None or self._loopback_stream is not None)
+            if sys_active and not self._sys_dead_warned:
+                gap = now - self._sys_last_data
+                if gap > STREAM_DEAD_THRESHOLD:
+                    self._sys_dead_warned = True
+                    log.warning(
+                        "System audio stream appears dead — no data for %.0fs", gap
+                    )
+                    self._emit_warning(
+                        "System audio stopped receiving data. "
+                        "Microphone recording continues."
+                    )
+
     # ── Audio saving ────────────────────────────────────────────
 
     def _save_audio(self) -> Path | None:
-        """Mix and save captured audio to WAV file."""
+        """Mix and save captured audio to WAV file.
+
+        Moves chunks out of the accumulation lists and frees them
+        incrementally to avoid doubling peak memory during concat.
+        """
+        # Move chunks out of the lists (swap-and-clear to minimise lock time)
         with self._lock:
-            mic_chunks = list(self._mic_chunks)
-            sys_chunks = list(self._sys_chunks)
+            mic_chunks = self._mic_chunks
+            sys_chunks = self._sys_chunks
+            self._mic_chunks = []
+            self._sys_chunks = []
 
         if not mic_chunks and not sys_chunks:
             log.warning("No audio data captured")
             return None
 
-        # Concatenate chunks
-        mic_audio = np.concatenate(mic_chunks) if mic_chunks else np.array([], dtype=np.float32)
-        sys_audio = np.concatenate(sys_chunks) if sys_chunks else np.array([], dtype=np.float32)
+        log.info(
+            "Saving audio: mic_chunks=%d, sys_chunks=%d",
+            len(mic_chunks), len(sys_chunks),
+        )
+
+        # Concatenate chunks — pre-allocate to avoid intermediate copies
+        mic_audio = self._concat_and_free(mic_chunks)
+        sys_audio = self._concat_and_free(sys_chunks)
 
         # Mix: if both streams, combine them (simple average mix)
         if len(mic_audio) > 0 and len(sys_audio) > 0:
@@ -626,16 +734,16 @@ class AudioManager:
             if len(sys_audio) < max_len:
                 sys_audio = np.pad(sys_audio, (0, max_len - len(sys_audio)))
 
-            # Mix both streams with equal weight — both are important
-            # for meeting recordings (mic = your voice, system = remote participants)
-            mixed = mic_audio * 0.5 + sys_audio * 0.5
+            # Mix in-place to avoid yet another allocation
+            mic_audio *= 0.5
+            mic_audio += sys_audio * 0.5
+            del sys_audio  # free immediately
 
             # Normalize to use full dynamic range
-            max_val = np.max(np.abs(mixed))
+            max_val = float(np.max(np.abs(mic_audio)))
             if max_val > 0.001:
-                # Normalize to 0.9 peak to prevent clipping
-                mixed = mixed * (0.9 / max_val)
-            audio = mixed
+                mic_audio *= 0.9 / max_val
+            audio = mic_audio
         elif len(mic_audio) > 0:
             audio = mic_audio
         else:
@@ -653,9 +761,33 @@ class AudioManager:
         filename = f"{timestamp}_{safe_name}.wav"
         filepath = self._save_path / filename
 
-        sf.write(str(filepath), audio, SAMPLE_RATE)
-        log.info("Saved recording: %s (%.1fs)", filepath, duration)
-        return filepath
+        try:
+            sf.write(str(filepath), audio, SAMPLE_RATE)
+            log.info("Saved recording: %s (%.1fs)", filepath, duration)
+            return filepath
+        except Exception as e:
+            log.error("Failed to write WAV file %s: %s", filepath, e)
+            self._emit_error(f"Failed to save recording: {e}")
+            return None
+
+    @staticmethod
+    def _concat_and_free(chunks: list[np.ndarray]) -> np.ndarray:
+        """Concatenate audio chunks into a single array, freeing as we go.
+
+        Pre-allocates the output buffer, then copies each chunk in and
+        deletes the source to keep peak memory ~1x instead of ~2x.
+        """
+        if not chunks:
+            return np.array([], dtype=np.float32)
+
+        total = sum(len(c) for c in chunks)
+        out = np.empty(total, dtype=np.float32)
+        offset = 0
+        while chunks:
+            c = chunks.pop(0)
+            out[offset:offset + len(c)] = c
+            offset += len(c)
+        return out
 
     # ── Internal helpers ────────────────────────────────────────
 

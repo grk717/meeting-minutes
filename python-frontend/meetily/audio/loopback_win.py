@@ -204,6 +204,8 @@ class LoopbackStream:
 
         # Callback for captured audio (mono float32 at target_rate)
         self.on_data: Callable[[np.ndarray], None] | None = None
+        # Callback for errors (string message)
+        self.on_error: Callable[[str], None] | None = None
 
         log.info(
             "LoopbackStream configured: '%s' (%dHz, %dch -> %dHz mono)",
@@ -247,13 +249,40 @@ class LoopbackStream:
         log.info("Loopback stream started (polling mode, %d frames/buffer)", frames_per_buffer)
 
     def _read_loop(self) -> None:
-        """Polling loop that reads from the loopback stream."""
+        """Polling loop that reads from the loopback stream.
+
+        WASAPI loopback streams can crash with an access violation
+        (segfault) when the audio device becomes invalid — for example
+        when Bluetooth headphones disconnect, the display sleeps, or
+        the Windows audio service restarts.
+
+        We defend against this by:
+        1. Checking stream.is_active() before each read
+        2. Counting consecutive errors and giving up after a threshold
+        3. Notifying the on_error callback so the UI can warn the user
+        """
         frames_per_read = int(self._device_rate * 0.05)  # 50ms chunks
+        consecutive_errors = 0
+        max_consecutive_errors = 5
 
         while self._running and self._stream is not None:
             try:
+                # Guard: check the stream is still alive before reading.
+                # This avoids the C-level access violation that occurs
+                # when calling read() on a dead WASAPI handle.
+                if not self._stream.is_active():
+                    if self._running:
+                        log.warning("Loopback stream no longer active — stopping reader")
+                        if self.on_error is not None:
+                            self.on_error(
+                                "System audio stream stopped unexpectedly. "
+                                "The audio device may have disconnected."
+                            )
+                    break
+
                 # Read raw bytes from stream
                 raw = self._stream.read(frames_per_read, exception_on_overflow=False)
+                consecutive_errors = 0  # successful read
 
                 # Convert bytes to float32 numpy
                 audio = np.frombuffer(raw, dtype=np.float32)
@@ -294,11 +323,30 @@ class LoopbackStream:
 
             except OSError as e:
                 if self._running:
-                    log.warning("Loopback read error: %s", e)
+                    consecutive_errors += 1
+                    log.warning(
+                        "Loopback read error (%d/%d): %s",
+                        consecutive_errors, max_consecutive_errors, e,
+                    )
+                    if consecutive_errors >= max_consecutive_errors:
+                        log.error(
+                            "Too many consecutive loopback read errors — "
+                            "stopping capture to prevent crash"
+                        )
+                        if self.on_error is not None:
+                            self.on_error(
+                                "System audio capture stopped: too many read errors. "
+                                "Microphone recording continues."
+                            )
+                        break
             except Exception as e:
                 if self._running:
                     log.error("Loopback read error: %s", e)
+                    if self.on_error is not None:
+                        self.on_error(f"System audio error: {e}")
                 break
+
+        log.info("Loopback read loop exited")
 
     def stop(self) -> None:
         """Stop capturing."""
