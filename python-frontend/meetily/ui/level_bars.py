@@ -132,22 +132,22 @@ class LevelBarsWidget(QWidget):
             level = self._bar_values[i]
 
             if self._is_active:
-                # Active: indigo to violet gradient
-                color_bottom = QColor(99, 102, 241)   # indigo-500
-                color_top = QColor(139, 92, 246)       # violet-500
+                # Active: muted blue to cyan gradient
+                color_bottom = QColor(59, 130, 196)    # muted blue
+                color_top = QColor(58, 166, 185)        # muted teal
 
                 if level > 0.6:
-                    # High levels get warmer
+                    # High levels get brighter cyan
                     t = (level - 0.6) / 0.4
                     color_top = QColor(
-                        int(139 + (244 - 139) * t),
-                        int(92 + (63 - 92) * t),
-                        int(246 + (94 - 246) * t),
+                        int(58 + (74 - 58) * t),
+                        int(166 + (194 - 166) * t),
+                        int(185 + (214 - 185) * t),
                     )
             else:
                 # Idle: subtle muted bars
-                color_bottom = QColor(42, 42, 66)
-                color_top = QColor(55, 55, 85)
+                color_bottom = QColor(28, 42, 56)
+                color_top = QColor(36, 54, 72)
 
             gradient = QLinearGradient(x, y + bar_height, x, y)
             gradient.setColorAt(0.0, color_bottom)
@@ -163,7 +163,7 @@ class LevelBarsWidget(QWidget):
             # Subtle glow effect on active bars with high levels
             if self._is_active and level > 0.3:
                 glow_alpha = int(25 * min(1.0, level))
-                glow_color = QColor(99, 102, 241, glow_alpha)
+                glow_color = QColor(59, 130, 196, glow_alpha)
                 painter.setPen(QPen(glow_color, 2))
                 painter.setBrush(QColor(0, 0, 0, 0))
                 painter.drawRoundedRect(

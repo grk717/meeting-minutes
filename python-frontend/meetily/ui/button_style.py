@@ -14,6 +14,7 @@ QPushButton {
     border: 1px solid #1e3040;
     border-radius: 8px;
     padding: 8px 16px;
+    font-family: "Inter", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
     font-weight: 600;
 }
@@ -42,6 +43,7 @@ QPushButton {
     border: 1px solid #1e3040;
     border-radius: 6px;
     padding: 5px 12px;
+    font-family: "Inter", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     font-size: 12px;
     font-weight: 600;
 }
