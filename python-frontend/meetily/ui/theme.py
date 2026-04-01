@@ -733,8 +733,7 @@ MeetingListItem:hover {
 #toast {
     border-radius: 10px;
     border: 1px solid #2a2a42;
-    padding: 12px 14px;
-    min-height: 36px;
+    padding: 0px;
 }
 
 #toast[toastType="success"] {

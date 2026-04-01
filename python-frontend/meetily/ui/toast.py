@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QWidget,
 )
 
@@ -34,11 +35,14 @@ _ICONS = {
 
 
 class Toast(QFrame):
-    """Single auto-dismissing notification bubble."""
+    """Single auto-dismissing notification bubble.
 
-    # Toast sizing constraints
+    Automatically sizes its height based on the message text length
+    and the available width.
+    """
+
     _MAX_WIDTH = 360
-    _MIN_WIDTH = 200
+    _MIN_WIDTH = 220
 
     def __init__(
         self,
@@ -50,36 +54,34 @@ class Toast(QFrame):
         super().__init__(parent)
         self.setObjectName("toast")
         self.setProperty("toastType", toast_type.value)
-        self.setMaximumWidth(self._MAX_WIDTH)
-        self.setMinimumWidth(self._MIN_WIDTH)
-
-        # Horizontal margins: icon(22) + spacing(12)*2 + close(24) + margins(16+12)
-        self._chrome_width = 22 + 12 + 12 + 24 + 16 + 12  # = 98
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 12, 12, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(14, 10, 10, 10)
+        layout.setSpacing(10)
 
         # Icon
         icon_label = QLabel(_ICONS.get(toast_type, ""))
         icon_label.setObjectName(f"toastIcon{toast_type.value.title()}")
-        icon_label.setFixedWidth(22)
-        layout.addWidget(icon_label)
+        icon_label.setFixedWidth(20)
+        icon_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignTop)
 
-        # Message
+        # Message — word-wrap is key
         self._msg_label = QLabel(message)
         self._msg_label.setObjectName("toastMessage")
         self._msg_label.setWordWrap(True)
-        self._msg_label.setMinimumHeight(20)
+        self._msg_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         layout.addWidget(self._msg_label, 1)
 
         # Close button
         close_btn = QPushButton("\u2715")
         close_btn.setObjectName("toastCloseBtn")
-        close_btn.setFixedSize(24, 24)
+        close_btn.setFixedSize(22, 22)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.clicked.connect(self._dismiss)
-        layout.addWidget(close_btn)
+        layout.addWidget(close_btn, 0, Qt.AlignmentFlag.AlignTop)
 
         # Opacity effect for fade-out animation
         self._opacity = QGraphicsOpacityEffect(self)
@@ -95,15 +97,40 @@ class Toast(QFrame):
         self._dismissed = False
         self._manager: ToastManager | None = None
 
-    def compute_height_for_width(self, w: int) -> int:
-        """Calculate the correct total height given a fixed width."""
-        text_width = w - self._chrome_width
-        text_height = self._msg_label.fontMetrics().boundingRect(
-            0, 0, text_width, 0,
-            Qt.TextFlag.TextWordWrap, self._msg_label.text(),
-        ).height()
-        # Vertical margins (12 top + 12 bottom) + at least 20px for single line
-        return max(text_height, 20) + 24
+    def apply_width_and_compute_height(self, width: int) -> int:
+        """Set the toast width and return the correct height for its content.
+
+        Uses QFontMetrics.boundingRect with TextWordWrap to measure how many
+        lines the message needs at the given width, then adds layout margins.
+        """
+        self.setFixedWidth(width)
+
+        margins = self.layout().contentsMargins()
+        spacing = self.layout().spacing()
+        # Available width for the text label = total - margins - icon - close - spacings
+        text_w = (
+            width
+            - margins.left() - margins.right()
+            - 20   # icon width
+            - 22   # close button width
+            - spacing * 2  # two gaps between three items
+        )
+        text_w = max(text_w, 60)
+
+        fm = self._msg_label.fontMetrics()
+        text_rect = fm.boundingRect(
+            0, 0, text_w, 10000,
+            int(Qt.TextFlag.TextWordWrap),
+            self._msg_label.text(),
+        )
+        text_h = text_rect.height()
+
+        # Total height = text height + vertical margins, with a sensible minimum
+        total_h = text_h + margins.top() + margins.bottom()
+        total_h = max(total_h, 40)  # minimum toast height
+
+        self.setFixedHeight(total_h)
+        return total_h
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -135,7 +162,7 @@ class ToastManager:
     def __init__(self, parent: QWidget) -> None:
         self._parent = parent
         self._toasts: list[Toast] = []
-        self._margin = 16
+        self._margin = 12
         self._gap = 6
 
     def show_toast(
@@ -168,21 +195,19 @@ class ToastManager:
             self._reposition()
 
     def _reposition(self) -> None:
-        """Stack toasts from top-right of the parent widget, adapting to window size."""
-        parent_rect = self._parent.rect()
-        # Calculate toast width: up to MAX_WIDTH but capped at parent width minus margins
-        available_width = parent_rect.width() - self._margin * 2
-        toast_width = min(Toast._MAX_WIDTH, max(Toast._MIN_WIDTH, available_width))
+        """Stack toasts from top-right, adapting width to window size."""
+        pw = self._parent.width()
 
-        x = parent_rect.right() - toast_width - self._margin
-        # Ensure x doesn't go negative on very small windows
+        # Toast width: up to MAX, but shrink if parent is narrow
+        available = pw - self._margin * 2
+        toast_w = min(Toast._MAX_WIDTH, max(Toast._MIN_WIDTH, available))
+
+        x = pw - toast_w - self._margin
         x = max(self._margin, x)
-        y = self._margin + 44  # offset below header bar
+        y = self._margin + 44  # below header bar
 
         for toast in self._toasts:
-            toast.setFixedWidth(toast_width)
-            h = toast.compute_height_for_width(toast_width)
-            toast.setFixedHeight(h)
+            h = toast.apply_width_and_compute_height(toast_w)
             toast.move(x, y)
             toast.raise_()
             y += h + self._gap

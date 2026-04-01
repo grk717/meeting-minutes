@@ -240,6 +240,7 @@ class MainWindow(QMainWindow):
 
         # ── Recording controls section (scrollable) ──
         self._rec_widget = QWidget()
+        self._rec_widget.setMinimumHeight(280)
         rec_outer = QVBoxLayout(self._rec_widget)
         rec_outer.setContentsMargins(0, 0, 0, 0)
         rec_outer.setSpacing(0)
@@ -395,6 +396,7 @@ class MainWindow(QMainWindow):
 
         # ── Content area: Transcript + Summary with visible splitter ──
         content_wrapper = QWidget()
+        content_wrapper.setMinimumHeight(120)
         content_wrapper_layout = QVBoxLayout(content_wrapper)
         content_wrapper_layout.setContentsMargins(16, 12, 16, 16)
         content_wrapper_layout.setSpacing(0)
