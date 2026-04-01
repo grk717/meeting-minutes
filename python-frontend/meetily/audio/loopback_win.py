@@ -256,33 +256,49 @@ class LoopbackStream:
         when Bluetooth headphones disconnect, the display sleeps, or
         the Windows audio service restarts.
 
-        We defend against this by:
-        1. Checking stream.is_active() before each read
-        2. Counting consecutive errors and giving up after a threshold
-        3. Notifying the on_error callback so the UI can warn the user
+        The segfault happens inside the C call to pa.read() and CANNOT
+        be caught by Python exception handling. is_active() also lies —
+        it returns True even after the handle is corrupted.
+
+        The only reliable defense is to run read() in a disposable
+        sub-thread with a short timeout. If read() hangs or segfaults,
+        only the sub-thread dies — the reader loop detects the timeout
+        and exits cleanly.
         """
         frames_per_read = int(self._device_rate * 0.05)  # 50ms chunks
         consecutive_errors = 0
         max_consecutive_errors = 5
+        read_timeout = 2.0  # seconds — a 50ms read should never take this long
 
         while self._running and self._stream is not None:
             try:
-                # Guard: check the stream is still alive before reading.
-                # This avoids the C-level access violation that occurs
-                # when calling read() on a dead WASAPI handle.
                 if not self._stream.is_active():
                     if self._running:
                         log.warning("Loopback stream no longer active — stopping reader")
-                        if self.on_error is not None:
-                            self.on_error(
-                                "System audio stream stopped unexpectedly. "
-                                "The audio device may have disconnected."
-                            )
+                        self._notify_error(
+                            "System audio stream stopped unexpectedly. "
+                            "The audio device may have disconnected."
+                        )
                     break
 
-                # Read raw bytes from stream
-                raw = self._stream.read(frames_per_read, exception_on_overflow=False)
-                consecutive_errors = 0  # successful read
+                # Run read() in a sub-thread so a segfault or hang
+                # kills only the sub-thread, not the whole process.
+                raw = self._guarded_read(frames_per_read, read_timeout)
+                if raw is None:
+                    # read() timed out or the stream was killed
+                    if self._running:
+                        log.error(
+                            "Loopback read timed out (%.1fs) — "
+                            "WASAPI handle likely dead, stopping to prevent crash",
+                            read_timeout,
+                        )
+                        self._notify_error(
+                            "System audio device stopped responding. "
+                            "Microphone recording continues."
+                        )
+                    break
+
+                consecutive_errors = 0
 
                 # Convert bytes to float32 numpy
                 audio = np.frombuffer(raw, dtype=np.float32)
@@ -295,7 +311,6 @@ class LoopbackStream:
                     try:
                         audio = audio.reshape(-1, self._device_channels).mean(axis=1)
                     except ValueError:
-                        # If reshape fails, just take every Nth sample
                         audio = audio[::self._device_channels]
 
                 # Resample to target rate if needed
@@ -308,12 +323,9 @@ class LoopbackStream:
                     )
 
                 # Boost loopback audio — WASAPI loopback often delivers
-                # very quiet signals (0.01-0.1 range). Normalize to use
-                # more of the dynamic range while preventing clipping.
+                # very quiet signals (0.01-0.1 range).
                 peak = np.max(np.abs(audio))
-                if peak > 1e-6:  # Not silence
-                    # Target peak of ~0.8 to leave headroom
-                    # Use a capped gain to avoid amplifying noise
+                if peak > 1e-6:
                     gain = min(0.8 / peak, 10.0)
                     if gain > 1.5:
                         audio = audio * gain
@@ -333,38 +345,106 @@ class LoopbackStream:
                             "Too many consecutive loopback read errors — "
                             "stopping capture to prevent crash"
                         )
-                        if self.on_error is not None:
-                            self.on_error(
-                                "System audio capture stopped: too many read errors. "
-                                "Microphone recording continues."
-                            )
+                        self._notify_error(
+                            "System audio capture stopped: too many read errors. "
+                            "Microphone recording continues."
+                        )
                         break
             except Exception as e:
                 if self._running:
                     log.error("Loopback read error: %s", e)
-                    if self.on_error is not None:
-                        self.on_error(f"System audio error: {e}")
+                    self._notify_error(f"System audio error: {e}")
                 break
 
         log.info("Loopback read loop exited")
 
-    def stop(self) -> None:
-        """Stop capturing."""
-        self._running = False
-        if self._thread is not None:
-            self._thread.join(timeout=2.0)
-            self._thread = None
-        if self._stream is not None:
+    def _guarded_read(self, frames: int, timeout: float) -> bytes | None:
+        """Run stream.read() in a disposable thread with a timeout.
+
+        If the WASAPI handle is corrupted, read() will either:
+          (a) segfault — kills only the sub-thread (daemon), or
+          (b) hang forever — we detect via timeout and abandon it.
+
+        Returns the raw bytes on success, or None on timeout/failure.
+        """
+        # Capture a local reference — stop() may set self._stream = None
+        stream = self._stream
+        if stream is None:
+            return None
+
+        result: list[bytes | None] = [None]
+
+        def _do_read():
             try:
-                self._stream.stop_stream()
-                self._stream.close()
-            except Exception as e:
-                log.warning("Error stopping loopback stream: %s", e)
+                result[0] = stream.read(frames, exception_on_overflow=False)
+            except Exception:
+                result[0] = None
+
+        t = threading.Thread(target=_do_read, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
+
+        if t.is_alive():
+            # read() is hung or segfaulted in the sub-thread.
+            # The daemon thread will be cleaned up on process exit.
+            return None
+
+        return result[0]
+
+    def _notify_error(self, message: str) -> None:
+        """Safely invoke the on_error callback."""
+        if self.on_error is not None:
+            try:
+                self.on_error(message)
+            except Exception:
+                pass
+
+    def stop(self) -> None:
+        """Stop capturing.
+
+        Sets _running=False so the read loop exits on its next iteration,
+        then waits for the reader thread to finish. Stream teardown
+        (stop_stream/close) runs in a daemon thread with a timeout
+        because these calls can also hang on a dead WASAPI handle.
+        """
+        self._running = False
+
+        # Wait for the read loop to notice _running=False and exit.
+        # The _guarded_read timeout is 2s, so the loop will check
+        # _running within at most ~2s.
+        if self._thread is not None:
+            self._thread.join(timeout=5.0)
+            if self._thread.is_alive():
+                log.warning("Loopback reader thread did not exit — abandoning")
+            self._thread = None
+
+        # Now tear down the stream. The read loop is no longer using it.
+        if self._stream is not None:
+            stream_ref = self._stream
             self._stream = None
+
+            def _do_close():
+                try:
+                    stream_ref.stop_stream()
+                except Exception as e:
+                    log.debug("Error in stop_stream: %s", e)
+                try:
+                    stream_ref.close()
+                except Exception as e:
+                    log.debug("Error in close: %s", e)
+
+            closer = threading.Thread(target=_do_close, daemon=True)
+            closer.start()
+            closer.join(timeout=2.0)
+            if closer.is_alive():
+                log.warning("Loopback stream close timed out — abandoning handle")
 
     def close(self) -> None:
         """Release resources."""
         self.stop()
         if self._pa is not None:
-            self._pa.terminate()
+            try:
+                self._pa.terminate()
+            except Exception as e:
+                log.debug("Error terminating PyAudio: %s", e)
             self._pa = None

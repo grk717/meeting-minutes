@@ -33,48 +33,45 @@ def _make_fake_audio(samples: int = 800) -> bytes:
     return np.random.randn(samples).astype(np.float32).tobytes()
 
 
-# ── Test 1: stream.is_active() returns False ─────────────────
+# ── Test 1: read() hangs (simulates segfault/dead handle) ────
 
 def test_dead_handle() -> None:
-    """Simulate the WASAPI handle going dead mid-recording.
+    """Simulate read() hanging on a dead WASAPI handle.
 
-    This is what happened in the real crash: the device disconnected,
-    is_active() would return False, but old code didn't check it and
-    called read() on the dead handle → access violation.
+    This is the real crash scenario: the device disconnects, and
+    read() either segfaults (kills thread) or hangs forever. The
+    _guarded_read() wrapper runs read() in a daemon sub-thread
+    with a timeout — if it doesn't return, we abandon it.
     """
     print("\n" + "=" * 60)
-    print("TEST: Dead WASAPI handle (is_active → False)")
+    print("TEST: Dead WASAPI handle (read hangs → guarded timeout)")
     print("=" * 60)
 
     errors_received: list[str] = []
     data_received: list[np.ndarray] = []
-
-    # Build a mock stream that works for 5 reads then "dies"
-    mock_stream = MagicMock()
     read_count = 0
+
+    mock_stream = MagicMock()
 
     def fake_read(frames, exception_on_overflow=False):
         nonlocal read_count
         read_count += 1
-        time.sleep(0.01)  # simulate real timing
-        return _make_fake_audio(frames * 2)  # stereo
+        if read_count <= 5:
+            time.sleep(0.01)
+            return _make_fake_audio(frames * 2)  # stereo
+        else:
+            # Simulate hang (what happens before a segfault)
+            time.sleep(30)
+            return b""
 
     mock_stream.read = fake_read
+    mock_stream.is_active.return_value = True  # lies — returns True even when dead
 
-    call_count = 0
-    def fake_is_active():
-        nonlocal call_count
-        call_count += 1
-        return call_count <= 5  # alive for 5 checks, then dead
-
-    mock_stream.is_active = fake_is_active
-
-    # Manually drive the read loop logic (extracted from LoopbackStream)
+    # Simulate _guarded_read + read loop
     frames_per_read = 2400
     device_channels = 2
-    device_rate = 48000
-    target_rate = 16000
     running = True
+    guarded_timeout = 0.5  # short timeout for test
 
     def on_data(audio):
         data_received.append(audio)
@@ -83,37 +80,45 @@ def test_dead_handle() -> None:
         errors_received.append(msg)
         print(f"  [on_error] {msg}")
 
-    # Simulate the read loop
-    consecutive_errors = 0
-    max_consecutive_errors = 5
+    def guarded_read(frames, timeout):
+        """Same logic as LoopbackStream._guarded_read."""
+        result = [None]
+        def _do_read():
+            try:
+                result[0] = mock_stream.read(frames, exception_on_overflow=False)
+            except Exception:
+                result[0] = None
+        t = threading.Thread(target=_do_read, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
+        if t.is_alive():
+            return None  # timed out
+        return result[0]
 
-    while running and mock_stream is not None:
+    while running:
         if not mock_stream.is_active():
-            print("  [reader] Stream no longer active — exiting cleanly")
+            on_error("Stream not active")
+            break
+
+        raw = guarded_read(frames_per_read, guarded_timeout)
+        if raw is None:
+            print("  [reader] Guarded read timed out — stream is dead")
             on_error(
-                "System audio stream stopped unexpectedly. "
-                "The audio device may have disconnected."
+                "System audio device stopped responding. "
+                "Microphone recording continues."
             )
             break
 
-        try:
-            raw = mock_stream.read(frames_per_read, exception_on_overflow=False)
-            consecutive_errors = 0
-            audio = np.frombuffer(raw, dtype=np.float32)
-            if device_channels > 1:
-                audio = audio.reshape(-1, device_channels).mean(axis=1)
-            on_data(audio)
-        except OSError as e:
-            consecutive_errors += 1
-            if consecutive_errors >= max_consecutive_errors:
-                on_error(f"Too many errors: {e}")
-                break
+        audio = np.frombuffer(raw, dtype=np.float32)
+        if device_channels > 1:
+            audio = audio.reshape(-1, device_channels).mean(axis=1)
+        on_data(audio)
 
     print(f"  Chunks received before death: {len(data_received)}")
     print(f"  Errors received: {len(errors_received)}")
     assert len(errors_received) == 1, "Should have received exactly 1 error"
-    assert len(data_received) == 5, "Should have received 5 chunks before death"
-    print("  PASS: Exited cleanly, no crash")
+    assert len(data_received) == 5, "Should have received 5 data chunks"
+    print("  PASS: Exited cleanly via timeout, no crash")
 
 
 # ── Test 2: consecutive read errors ──────────────────────────

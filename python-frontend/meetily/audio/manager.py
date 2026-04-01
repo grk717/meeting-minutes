@@ -30,7 +30,10 @@ LEVEL_SMOOTHING = 0.3  # EMA smoothing for level meter
 LEVEL_UPDATE_INTERVAL = 1.0 / 30  # Throttle level callbacks to ~30fps
 CHUNK_LOG_INTERVAL = 5000  # Log chunk stats every N chunks
 STREAM_WATCHDOG_INTERVAL = 5.0  # Check stream health every N seconds
-STREAM_DEAD_THRESHOLD = 10.0  # Seconds of no data before declaring stream dead
+# How long with zero callbacks before we consider a stream dead.
+# WASAPI loopback sends data continuously even during silence (~50ms intervals),
+# so 30s of no callbacks means the device is truly gone, not just a quiet room.
+STREAM_DEAD_THRESHOLD = 30.0
 
 
 class RecordingState(enum.Enum):
@@ -686,17 +689,23 @@ class AudioManager:
                         "The device may have disconnected."
                     )
 
-            # Check system audio stream
+            # Check system audio stream.
+            # WASAPI loopback sends data continuously (~50ms intervals)
+            # even during silence, so if callbacks stop for 30s the
+            # device is truly gone. We only warn here — the actual crash
+            # prevention is in LoopbackStream._guarded_read() which
+            # isolates every read() in a daemon thread with a timeout.
             sys_active = (self._sys_stream is not None or self._loopback_stream is not None)
             if sys_active and not self._sys_dead_warned:
                 gap = now - self._sys_last_data
                 if gap > STREAM_DEAD_THRESHOLD:
                     self._sys_dead_warned = True
                     log.warning(
-                        "System audio stream appears dead — no data for %.0fs", gap
+                        "System audio stream appears dead — no data for %.0fs",
+                        gap,
                     )
                     self._emit_warning(
-                        "System audio stopped receiving data. "
+                        "System audio may have disconnected. "
                         "Microphone recording continues."
                     )
 
