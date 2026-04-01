@@ -227,7 +227,7 @@ class Sidebar(QWidget):
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setFixedHeight(1)
-        sep.setStyleSheet("background-color: #1e1e32; border: none;")
+        sep.setStyleSheet("background-color: #172230; border: none;")
         return sep
 
     def populate(self, meetings: list[Meeting]) -> None:

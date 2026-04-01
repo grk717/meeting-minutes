@@ -181,7 +181,7 @@ class MainWindow(QMainWindow):
 
         # ── Right pane (main content) ──
         right_pane = QWidget()
-        right_pane.setStyleSheet("background-color: #0d0d14;")
+        right_pane.setStyleSheet("background-color: #0a1018;")
         right_pane.setMinimumWidth(400)
         right_layout = QVBoxLayout(right_pane)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -190,7 +190,7 @@ class MainWindow(QMainWindow):
         # ── Header bar ──
         header_bar = QWidget()
         header_bar.setStyleSheet(
-            "background-color: #0d0d14; border-bottom: 1px solid #1e1e32;"
+            "background-color: #0a1018; border-bottom: 1px solid #172230;"
         )
         header_layout = QHBoxLayout(header_bar)
         header_layout.setContentsMargins(20, 12, 20, 12)
@@ -250,8 +250,8 @@ class MainWindow(QMainWindow):
         rec_card = QWidget()
         rec_card.setObjectName("recordingSection")
         rec_card.setStyleSheet(
-            "#recordingSection { background-color: #13131f; "
-            "border: 1px solid #1e1e32; border-radius: 12px; }"
+            "#recordingSection { background-color: #0e1620; "
+            "border: 1px solid #172230; border-radius: 12px; }"
         )
         rec_card_layout = QVBoxLayout(rec_card)
         rec_card_layout.setContentsMargins(16, 16, 16, 16)

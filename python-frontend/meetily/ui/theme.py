@@ -1,39 +1,39 @@
 """Modern dark theme stylesheet for the application.
 
 Design language inspired by Linear, Raycast, and Arc browser.
-Uses a refined color system with subtle gradients, smooth borders,
+Uses a refined color system with muted blue-cyan tones, smooth borders,
 and consistent spacing on an 8px grid.
 """
 
 # ── Design Tokens ──
 # Background layers (darkest to lightest):
-#   bg-base:    #0d0d14   (window/app background)
-#   bg-surface: #13131f   (sidebar, panels)
-#   bg-card:    #1a1a2a   (cards, elevated surfaces)
-#   bg-hover:   #222238   (hover states)
-#   bg-input:   #0f0f1a   (input fields)
+#   bg-base:    #0a1018   (window/app background – dark blue-black)
+#   bg-surface: #0e1620   (sidebar, panels)
+#   bg-card:    #141e2a   (cards, elevated surfaces)
+#   bg-hover:   #1c2a38   (hover states)
+#   bg-input:   #0c1219   (input fields)
 #
 # Border:
-#   border-subtle:  #1e1e32   (dividers, card borders)
-#   border-default: #2a2a42   (input borders)
-#   border-focus:   #6366f1   (focus rings)
+#   border-subtle:  #172230   (dividers, card borders)
+#   border-default: #1e3040   (input borders)
+#   border-focus:   #3b82c4   (focus rings – muted blue)
 #
 # Text:
-#   text-primary:   #f0f0f5   (headings, primary content)
-#   text-secondary: #a0a0b8   (body text, descriptions)
-#   text-tertiary:  #6b6b80   (captions, timestamps, placeholders)
-#   text-disabled:  #3a3a4e   (disabled state)
+#   text-primary:   #e8ecf0   (headings, primary content)
+#   text-secondary: #94a3b8   (body text, descriptions)
+#   text-tertiary:  #5a7080   (captions, timestamps, placeholders)
+#   text-disabled:  #2e4050   (disabled state)
 #
 # Accent:
-#   accent:         #6366f1   (primary actions, links)
-#   accent-hover:   #7c7ff7   (hover on accent)
-#   accent-pressed: #4f46e5   (pressed on accent)
+#   accent:         #3b82c4   (primary actions, links – muted blue)
+#   accent-hover:   #4a9ad6   (hover on accent – lighter blue)
+#   accent-pressed: #2d6a9e   (pressed on accent – deeper blue)
 #
 # Semantic:
-#   success:   #34d399
-#   warning:   #fbbf24
-#   error:     #f87171
-#   info:      #60a5fa
+#   success:   #34b89a
+#   warning:   #d4a032
+#   error:     #d46464
+#   info:      #5a9ec8
 
 DARK_THEME = """
 /* ================================================================
@@ -41,8 +41,8 @@ DARK_THEME = """
    ================================================================ */
 
 QMainWindow {
-    background-color: #0d0d14;
-    color: #f0f0f5;
+    background-color: #0a1018;
+    color: #e8ecf0;
     font-family: "Inter", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
 }
@@ -54,7 +54,7 @@ QWidget {
 }
 
 QLabel {
-    color: #f0f0f5;
+    color: #e8ecf0;
 }
 
 /* ================================================================
@@ -69,13 +69,13 @@ QScrollBar:vertical {
 }
 
 QScrollBar::handle:vertical {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(200, 220, 240, 0.10);
     min-height: 32px;
     border-radius: 3px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(200, 220, 240, 0.18);
 }
 
 QScrollBar::add-line:vertical,
@@ -95,13 +95,13 @@ QScrollBar:horizontal {
 }
 
 QScrollBar::handle:horizontal {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(200, 220, 240, 0.10);
     min-width: 32px;
     border-radius: 3px;
 }
 
 QScrollBar::handle:horizontal:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(200, 220, 240, 0.18);
 }
 
 QScrollBar::add-line:horizontal,
@@ -120,7 +120,7 @@ QScrollBar::sub-page:horizontal {
 #appTitle {
     font-size: 20px;
     font-weight: 700;
-    color: #f0f0f5;
+    color: #e8ecf0;
     padding: 0;
     margin: 0;
     letter-spacing: -0.5px;
@@ -128,7 +128,7 @@ QScrollBar::sub-page:horizontal {
 
 #appSubtitle {
     font-size: 12px;
-    color: #6b6b80;
+    color: #5a7080;
     padding: 0;
     margin: 0;
     letter-spacing: 0.3px;
@@ -137,20 +137,20 @@ QScrollBar::sub-page:horizontal {
 #durationLabel {
     font-size: 36px;
     font-weight: 200;
-    color: #f0f0f5;
+    color: #e8ecf0;
     font-family: "JetBrains Mono", "SF Mono", "Cascadia Mono", "Consolas", monospace;
     letter-spacing: 2px;
 }
 
 #statusLabel {
     font-size: 12px;
-    color: #6b6b80;
+    color: #5a7080;
     letter-spacing: 0.2px;
 }
 
 #levelLabel {
     font-size: 10px;
-    color: #4a4a5e;
+    color: #3e5868;
     text-transform: uppercase;
     letter-spacing: 1px;
     font-weight: 600;
@@ -158,13 +158,13 @@ QScrollBar::sub-page:horizontal {
 
 #savedLabel {
     font-size: 12px;
-    color: #34d399;
+    color: #34b89a;
     padding: 6px 0;
 }
 
 #deviceLabel {
     font-size: 12px;
-    color: #a0a0b8;
+    color: #94a3b8;
     font-weight: 500;
 }
 
@@ -173,21 +173,21 @@ QScrollBar::sub-page:horizontal {
    ================================================================ */
 
 QGroupBox {
-    background-color: #13131f;
-    border: 1px solid #1e1e32;
+    background-color: #0e1620;
+    border: 1px solid #172230;
     border-radius: 12px;
     margin-top: 16px;
     padding: 20px 16px 16px 16px;
     font-weight: 600;
     font-size: 13px;
-    color: #a0a0b8;
+    color: #94a3b8;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
     padding: 2px 14px;
-    color: #6b6b80;
+    color: #5a7080;
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 1.5px;
@@ -199,29 +199,29 @@ QGroupBox::title {
    ================================================================ */
 
 QLineEdit {
-    background-color: #0f0f1a;
-    border: 1px solid #2a2a42;
+    background-color: #0c1219;
+    border: 1px solid #1e3040;
     border-radius: 8px;
     padding: 8px 12px;
-    color: #f0f0f5;
+    color: #e8ecf0;
     font-size: 13px;
-    selection-background-color: #6366f1;
+    selection-background-color: #3b82c4;
     selection-color: #ffffff;
 }
 
 QLineEdit:focus {
-    border-color: #6366f1;
-    background-color: #111120;
+    border-color: #3b82c4;
+    background-color: #0e1822;
 }
 
 QLineEdit:disabled {
-    background-color: #0d0d14;
-    color: #3a3a4e;
-    border-color: #1a1a2a;
+    background-color: #0a1018;
+    color: #2e4050;
+    border-color: #141e2a;
 }
 
 QLineEdit::placeholder {
-    color: #4a4a5e;
+    color: #3e5868;
 }
 
 /* ================================================================
@@ -229,28 +229,28 @@ QLineEdit::placeholder {
    ================================================================ */
 
 QComboBox {
-    background-color: #0f0f1a;
-    border: 1px solid #2a2a42;
+    background-color: #0c1219;
+    border: 1px solid #1e3040;
     border-radius: 8px;
     padding: 8px 12px;
-    color: #f0f0f5;
+    color: #e8ecf0;
     font-size: 13px;
     min-height: 18px;
 }
 
 QComboBox:hover {
-    border-color: #3a3a58;
-    background-color: #111120;
+    border-color: #284058;
+    background-color: #0e1822;
 }
 
 QComboBox:focus {
-    border-color: #6366f1;
+    border-color: #3b82c4;
 }
 
 QComboBox:disabled {
-    background-color: #0d0d14;
-    color: #3a3a4e;
-    border-color: #1a1a2a;
+    background-color: #0a1018;
+    color: #2e4050;
+    border-color: #141e2a;
 }
 
 QComboBox::drop-down {
@@ -263,16 +263,16 @@ QComboBox::down-arrow {
     image: none;
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
-    border-top: 5px solid #6b6b80;
+    border-top: 5px solid #5a7080;
     margin-right: 8px;
 }
 
 QComboBox QAbstractItemView {
-    background-color: #1a1a2a;
-    border: 1px solid #2a2a42;
+    background-color: #141e2a;
+    border: 1px solid #1e3040;
     border-radius: 8px;
-    color: #f0f0f5;
-    selection-background-color: #6366f1;
+    color: #e8ecf0;
+    selection-background-color: #3b82c4;
     selection-color: #ffffff;
     padding: 4px;
     outline: none;
@@ -285,7 +285,7 @@ QComboBox QAbstractItemView::item {
 }
 
 QComboBox QAbstractItemView::item:hover {
-    background-color: #222238;
+    background-color: #1c2a38;
 }
 
 /* ================================================================
@@ -293,7 +293,7 @@ QComboBox QAbstractItemView::item:hover {
    ================================================================ */
 
 QCheckBox {
-    color: #a0a0b8;
+    color: #94a3b8;
     spacing: 8px;
     font-size: 13px;
 }
@@ -302,37 +302,36 @@ QCheckBox::indicator {
     width: 16px;
     height: 16px;
     border-radius: 4px;
-    border: 1.5px solid #2a2a42;
-    background-color: #0f0f1a;
+    border: 1.5px solid #1e3040;
+    background-color: #0c1219;
 }
 
 QCheckBox::indicator:checked {
-    background-color: #6366f1;
-    border-color: #6366f1;
+    background-color: #3b82c4;
+    border-color: #3b82c4;
 }
 
 QCheckBox::indicator:hover {
-    border-color: #6366f1;
+    border-color: #3b82c4;
 }
 
 QCheckBox:disabled {
-    color: #3a3a4e;
+    color: #2e4050;
 }
 
 QCheckBox::indicator:disabled {
-    background-color: #0d0d14;
-    border-color: #1a1a2a;
+    background-color: #0a1018;
+    border-color: #141e2a;
 }
 
 /* ================================================================
    BUTTONS — all buttons share the same base style
-   (matching #sidebarNewBtn exactly)
    ================================================================ */
 
 QPushButton {
-    background-color: #1a1a2e;
-    color: #8080a0;
-    border: 1px solid #2a2a42;
+    background-color: #141e2e;
+    color: #6e8494;
+    border: 1px solid #1e3040;
     border-radius: 8px;
     padding: 8px 16px;
     font-size: 13px;
@@ -341,26 +340,26 @@ QPushButton {
 }
 
 QPushButton:hover {
-    background-color: #222238;
-    color: #b0b0c4;
-    border-color: #3a3a58;
+    background-color: #1c2a38;
+    color: #a0b4c4;
+    border-color: #284058;
 }
 
 QPushButton:pressed {
-    background-color: #13131f;
-    color: #8080a0;
-    border-color: #2a2a42;
+    background-color: #0e1620;
+    color: #6e8494;
+    border-color: #1e3040;
 }
 
 QPushButton:disabled {
-    background-color: #111120;
-    color: #3a3a4e;
-    border: 1px solid #1a1a2a;
+    background-color: #0e1822;
+    color: #2e4050;
+    border: 1px solid #141e2a;
 }
 
-/* Record button — indigo fill, the one accent exception */
+/* Record button — muted blue fill, the one accent exception */
 #recordBtn {
-    background-color: #6366f1;
+    background-color: #3b82c4;
     color: #ffffff;
     border: none;
     min-width: 160px;
@@ -368,20 +367,20 @@ QPushButton:disabled {
 }
 
 #recordBtn:hover {
-    background-color: #818cf8;
+    background-color: #4a9ad6;
     color: #ffffff;
     border: none;
 }
 
 #recordBtn:pressed {
-    background-color: #4f46e5;
+    background-color: #2d6a9e;
     color: #ffffff;
     border: none;
 }
 
-/* Stop button — red fill */
+/* Stop button — muted red fill */
 #stopBtn {
-    background-color: #ef4444;
+    background-color: #c44040;
     color: #ffffff;
     border: none;
     min-width: 160px;
@@ -389,13 +388,13 @@ QPushButton:disabled {
 }
 
 #stopBtn:hover {
-    background-color: #f87171;
+    background-color: #d46464;
     color: #ffffff;
     border: none;
 }
 
 #stopBtn:pressed {
-    background-color: #dc2626;
+    background-color: #a83232;
     color: #ffffff;
     border: none;
 }
@@ -433,20 +432,20 @@ QSplitter::handle {
 }
 
 #contentSplitter::handle {
-    background-color: #1e1e32;
-    border-left: 1px solid #1a1a2a;
-    border-right: 1px solid #1a1a2a;
+    background-color: #172230;
+    border-left: 1px solid #141e2a;
+    border-right: 1px solid #141e2a;
     width: 9px;
     margin: 12px 0;
     border-radius: 4px;
 }
 
 #contentSplitter::handle:hover {
-    background-color: #2a2a42;
+    background-color: #1e3040;
 }
 
 #contentSplitter::handle:pressed {
-    background-color: #6366f1;
+    background-color: #3b82c4;
 }
 
 /* ================================================================
@@ -454,34 +453,34 @@ QSplitter::handle {
    ================================================================ */
 
 #sidebar {
-    background-color: #0f0f1a;
-    border-right: 1px solid #1e1e32;
+    background-color: #0c1219;
+    border-right: 1px solid #172230;
 }
 
 #sidebarTitle {
     font-size: 11px;
     font-weight: 600;
-    color: #505068;
+    color: #3e5868;
     text-transform: uppercase;
     letter-spacing: 1.5px;
 }
 
 #sidebarSearch {
-    background-color: #13131f;
-    border: 1px solid #1e1e32;
+    background-color: #0e1620;
+    border: 1px solid #172230;
     border-radius: 8px;
     padding: 7px 12px 7px 30px;
-    color: #f0f0f5;
+    color: #e8ecf0;
     font-size: 12px;
 }
 
 #sidebarSearch:focus {
-    border-color: #6366f1;
-    background-color: #161626;
+    border-color: #3b82c4;
+    background-color: #101c28;
 }
 
 #sidebarSearch::placeholder {
-    color: #4a4a5e;
+    color: #3e5868;
 }
 
 #sidebarNewBtn {
@@ -493,23 +492,23 @@ QSplitter::handle {
 /* Meeting list item */
 #sidebarItemName {
     font-size: 13px;
-    color: #b0b0c4;
+    color: #a0b4c4;
     font-weight: 500;
 }
 
 #sidebarItemMeta {
     font-size: 11px;
-    color: #4a4a5e;
+    color: #3e5868;
 }
 
 #sidebarItemPreview {
     font-size: 11px;
-    color: #505068;
+    color: #3e5868;
 }
 
 #sidebarDeleteBtn {
     background-color: transparent;
-    color: #505068;
+    color: #3e5868;
     border: none;
     font-size: 12px;
     font-weight: bold;
@@ -519,8 +518,8 @@ QSplitter::handle {
 }
 
 #sidebarDeleteBtn:hover {
-    color: #f87171;
-    background-color: rgba(248, 113, 113, 0.1);
+    color: #d46464;
+    background-color: rgba(212, 100, 100, 0.1);
 }
 
 #sidebarScroll {
@@ -530,16 +529,16 @@ QSplitter::handle {
 
 /* Selected sidebar item uses dynamic property */
 MeetingListItem[selected="true"] {
-    background-color: #1a1a32;
+    background-color: #141e30;
     border-radius: 6px;
 }
 
 MeetingListItem[selected="true"] #sidebarItemName {
-    color: #e0e0f0;
+    color: #d0dce8;
 }
 
 MeetingListItem:hover {
-    background-color: #141424;
+    background-color: #101a24;
     border-radius: 6px;
 }
 
@@ -548,21 +547,21 @@ MeetingListItem:hover {
    ================================================================ */
 
 #meetingDetailBar {
-    background-color: #13131f;
-    border-bottom: 1px solid #1e1e32;
+    background-color: #0e1620;
+    border-bottom: 1px solid #172230;
     padding: 6px 8px;
 }
 
 #meetingDetailTitle {
     font-size: 15px;
     font-weight: 600;
-    color: #f0f0f5;
+    color: #e8ecf0;
     letter-spacing: -0.2px;
 }
 
 #meetingDetailMeta {
     font-size: 11px;
-    color: #6b6b80;
+    color: #5a7080;
 }
 
 #detailActionBtn,
@@ -582,15 +581,15 @@ MeetingListItem:hover {
    ================================================================ */
 
 #transcriptPanel {
-    background-color: #13131f;
-    border: 1px solid #1e1e32;
+    background-color: #0e1620;
+    border: 1px solid #172230;
     border-radius: 12px;
 }
 
 #transcriptHeader {
     font-size: 10px;
     font-weight: 700;
-    color: #6b6b80;
+    color: #5a7080;
     text-transform: uppercase;
     letter-spacing: 1.5px;
     padding: 0;
@@ -598,21 +597,21 @@ MeetingListItem:hover {
 
 #transcriptSegment {
     font-size: 13px;
-    color: #c8c8d8;
+    color: #b8c8d8;
     line-height: 1.6;
     padding: 6px 0;
 }
 
 #transcriptTimestamp {
     font-size: 10px;
-    color: #4a4a5e;
+    color: #3e5868;
     font-family: "JetBrains Mono", "SF Mono", "Cascadia Mono", "Consolas", monospace;
     font-weight: 500;
 }
 
 #transcriptSpeaker {
     font-size: 11px;
-    color: #6366f1;
+    color: #3b82c4;
     font-weight: 600;
 }
 
@@ -626,29 +625,29 @@ MeetingListItem:hover {
    ================================================================ */
 
 #summaryPanel {
-    background-color: #13131f;
-    border: 1px solid #1e1e32;
+    background-color: #0e1620;
+    border: 1px solid #172230;
     border-radius: 12px;
 }
 
 #summaryHeader {
     font-size: 10px;
     font-weight: 700;
-    color: #6b6b80;
+    color: #5a7080;
     text-transform: uppercase;
     letter-spacing: 1.5px;
 }
 
 #summaryText {
     font-size: 13px;
-    color: #c8c8d8;
+    color: #b8c8d8;
     line-height: 1.7;
     padding: 8px 0;
 }
 
 #summaryPlaceholder {
     font-size: 12px;
-    color: #4a4a5e;
+    color: #3e5868;
     font-style: italic;
 }
 
@@ -662,23 +661,23 @@ MeetingListItem:hover {
    ================================================================ */
 
 #retranscribeWidget {
-    background-color: #13131f;
-    border-bottom: 1px solid #1e1e32;
+    background-color: #0e1620;
+    border-bottom: 1px solid #172230;
     padding: 8px;
 }
 
 #retranscribeStatus {
     font-size: 12px;
-    color: #a0a0b8;
+    color: #94a3b8;
 }
 
 #retranscribeProgress {
-    background-color: #1a1a2a;
+    background-color: #141e2a;
     border-radius: 3px;
 }
 
 #retranscribeProgress::chunk {
-    background-color: #6366f1;
+    background-color: #3b82c4;
     border-radius: 3px;
 }
 
@@ -687,36 +686,36 @@ MeetingListItem:hover {
    ================================================================ */
 
 #speakerPanel {
-    background-color: #13131f;
-    border-bottom: 1px solid #1e1e32;
+    background-color: #0e1620;
+    border-bottom: 1px solid #172230;
     padding: 6px 12px;
 }
 
 #speakerPanelTitle {
     font-size: 10px;
     font-weight: 700;
-    color: #6b6b80;
+    color: #5a7080;
     text-transform: uppercase;
     letter-spacing: 1.5px;
 }
 
 #speakerLabel {
     font-size: 12px;
-    color: #6b6b80;
+    color: #5a7080;
     font-weight: 500;
 }
 
 #speakerInput {
-    background-color: #0f0f1a;
-    border: 1px solid #2a2a42;
+    background-color: #0c1219;
+    border: 1px solid #1e3040;
     border-radius: 6px;
     padding: 5px 8px;
-    color: #f0f0f5;
+    color: #e8ecf0;
     font-size: 12px;
 }
 
 #speakerInput:focus {
-    border-color: #6366f1;
+    border-color: #3b82c4;
 }
 
 #speakerApplyBtn {
@@ -732,63 +731,63 @@ MeetingListItem:hover {
 
 #toast {
     border-radius: 10px;
-    border: 1px solid #2a2a42;
+    border: 1px solid #1e3040;
     padding: 0px;
 }
 
 #toast[toastType="success"] {
-    background-color: rgba(52, 211, 153, 0.18);
-    border-color: rgba(52, 211, 153, 0.35);
+    background-color: rgba(52, 184, 154, 0.18);
+    border-color: rgba(52, 184, 154, 0.35);
 }
 
 #toast[toastType="error"] {
-    background-color: rgba(248, 113, 113, 0.18);
-    border-color: rgba(248, 113, 113, 0.35);
+    background-color: rgba(212, 100, 100, 0.18);
+    border-color: rgba(212, 100, 100, 0.35);
 }
 
 #toast[toastType="warning"] {
-    background-color: rgba(251, 191, 36, 0.18);
-    border-color: rgba(251, 191, 36, 0.35);
+    background-color: rgba(212, 160, 50, 0.18);
+    border-color: rgba(212, 160, 50, 0.35);
 }
 
 #toast[toastType="info"] {
-    background-color: rgba(96, 165, 250, 0.18);
-    border-color: rgba(96, 165, 250, 0.35);
+    background-color: rgba(90, 158, 200, 0.18);
+    border-color: rgba(90, 158, 200, 0.35);
 }
 
 #toastIconSuccess {
-    color: #34d399;
+    color: #34b89a;
     font-size: 16px;
     font-weight: bold;
 }
 
 #toastIconError {
-    color: #f87171;
+    color: #d46464;
     font-size: 16px;
     font-weight: bold;
 }
 
 #toastIconWarning {
-    color: #fbbf24;
+    color: #d4a032;
     font-size: 16px;
     font-weight: bold;
 }
 
 #toastIconInfo {
-    color: #60a5fa;
+    color: #5a9ec8;
     font-size: 16px;
     font-weight: bold;
 }
 
 #toastMessage {
-    color: #f0f0f5;
+    color: #e8ecf0;
     font-size: 13px;
     font-weight: 500;
 }
 
 #toastCloseBtn {
     background-color: transparent;
-    color: #6b6b80;
+    color: #5a7080;
     border: none;
     font-size: 13px;
     padding: 2px;
@@ -797,8 +796,8 @@ MeetingListItem:hover {
 }
 
 #toastCloseBtn:hover {
-    color: #f0f0f5;
-    background-color: rgba(255, 255, 255, 0.1);
+    color: #e8ecf0;
+    background-color: rgba(200, 220, 240, 0.1);
 }
 
 /* ================================================================
@@ -806,14 +805,14 @@ MeetingListItem:hover {
    ================================================================ */
 
 QDialog {
-    background-color: #0d0d14;
-    color: #f0f0f5;
+    background-color: #0a1018;
+    color: #e8ecf0;
 }
 
 #settingsSection {
     font-size: 11px;
     font-weight: 700;
-    color: #6366f1;
+    color: #3b82c4;
     text-transform: uppercase;
     letter-spacing: 1px;
     padding: 4px 0;
@@ -821,13 +820,13 @@ QDialog {
 
 #settingsDesc {
     font-size: 12px;
-    color: #6b6b80;
+    color: #5a7080;
     line-height: 1.5;
 }
 
 #settingsFieldLabel {
     font-size: 12px;
-    color: #a0a0b8;
+    color: #94a3b8;
     font-weight: 500;
 }
 
@@ -840,11 +839,11 @@ QDialogButtonBox QPushButton {
    ================================================================ */
 
 QMessageBox {
-    background-color: #13131f;
+    background-color: #0e1620;
 }
 
 QMessageBox QLabel {
-    color: #f0f0f5;
+    color: #e8ecf0;
     font-size: 13px;
 }
 
@@ -858,32 +857,32 @@ QMessageBox QPushButton {
    ================================================================ */
 
 #recordingSection {
-    background-color: #13131f;
-    border: 1px solid #1e1e32;
+    background-color: #0e1620;
+    border: 1px solid #172230;
     border-radius: 12px;
 }
 
 #recordingTitle {
     font-size: 10px;
     font-weight: 700;
-    color: #6b6b80;
+    color: #5a7080;
     text-transform: uppercase;
     letter-spacing: 1.5px;
 }
 
 #meetingNameInput {
-    background-color: #0f0f1a;
-    border: 1px solid #2a2a42;
+    background-color: #0c1219;
+    border: 1px solid #1e3040;
     border-radius: 8px;
     padding: 10px 14px;
-    color: #f0f0f5;
+    color: #e8ecf0;
     font-size: 14px;
     font-weight: 500;
 }
 
 #meetingNameInput:focus {
-    border-color: #6366f1;
-    background-color: #111120;
+    border-color: #3b82c4;
+    background-color: #0e1822;
 }
 
 /* ================================================================
@@ -895,8 +894,8 @@ QMessageBox QPushButton {
 }
 
 #tabActive {
-    background-color: #1a1a2a;
-    color: #f0f0f5;
+    background-color: #141e2a;
+    color: #e8ecf0;
     border: none;
     border-radius: 6px;
     padding: 6px 16px;
@@ -907,7 +906,7 @@ QMessageBox QPushButton {
 
 #tabInactive {
     background-color: transparent;
-    color: #6b6b80;
+    color: #5a7080;
     border: none;
     border-radius: 6px;
     padding: 6px 16px;
@@ -917,8 +916,8 @@ QMessageBox QPushButton {
 }
 
 #tabInactive:hover {
-    color: #a0a0b8;
-    background-color: rgba(255, 255, 255, 0.03);
+    color: #94a3b8;
+    background-color: rgba(200, 220, 240, 0.03);
 }
 
 /* ================================================================
@@ -926,7 +925,7 @@ QMessageBox QPushButton {
    ================================================================ */
 
 #divider {
-    background-color: #1e1e32;
+    background-color: #172230;
     max-height: 1px;
     min-height: 1px;
 }

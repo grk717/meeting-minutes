@@ -215,7 +215,7 @@ class DevicePanel(QWidget):
                 self._sys_status.setText("Select speakers/headphones to capture from")
             else:
                 self._sys_status.setText("Select a virtual audio input device")
-            self._sys_status.setStyleSheet("color: #6b6b80;")
+            self._sys_status.setStyleSheet("color: #5a7080;")
             return
 
         if self._auto_detected_device:
@@ -224,12 +224,12 @@ class DevicePanel(QWidget):
                 self._sys_status.setText(f"Auto: {name}")
             else:
                 self._sys_status.setText(f"Auto: {name}")
-            self._sys_status.setStyleSheet("color: #34d399;")
+            self._sys_status.setStyleSheet("color: #34b89a;")
         else:
             help_text = AudioManager.get_system_audio_help()
             first_line = help_text.split("\n")[0]
             self._sys_status.setText(f"Not available. {first_line}")
-            self._sys_status.setStyleSheet("color: #f87171;")
+            self._sys_status.setStyleSheet("color: #d46464;")
 
     def _on_mic_changed(self, index: int) -> None:
         device_index = self._mic_combo.currentData()
