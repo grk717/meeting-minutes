@@ -12,7 +12,11 @@ that gives each section room to breathe.
 
 from __future__ import annotations
 
+import faulthandler
 import logging
+import os
+import signal
+import sys
 import threading
 import time
 from pathlib import Path
@@ -48,8 +52,12 @@ from meetily.ui.summary_panel import SummaryPanel
 from meetily.ui.toast import ToastManager
 from meetily.ui.transcript_panel import TranscriptPanel
 from meetily.ui.button_style import apply_button_style
+from meetily.debug import DebugMonitor
 
 log = logging.getLogger(__name__)
+
+# Duration between autosaves (seconds) — protects against crash data loss
+_AUTOSAVE_INTERVAL_MS = 60_000  # 1 minute
 
 
 class AudioWorker(QObject):
@@ -99,6 +107,12 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1100, 650)
         self.resize(1440, 800)
 
+        # ── Crash protection ──
+        self._setup_crash_handlers()
+
+        # Debug monitor (singleton, starts only in debug mode)
+        self._debug_monitor = DebugMonitor.instance()
+
         # Audio manager
         self._audio = AudioManager()
         self._audio.on_levels_updated = self._on_audio_levels
@@ -138,6 +152,11 @@ class MainWindow(QMainWindow):
         self._duration_timer = QTimer(self)
         self._duration_timer.timeout.connect(self._update_duration)
         self._duration_timer.setInterval(500)
+
+        # Autosave timer — periodically saves transcript to DB during recording
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.timeout.connect(self._autosave_recording)
+        self._autosave_timer.setInterval(_AUTOSAVE_INTERVAL_MS)
 
         self._build_ui()
 
@@ -403,6 +422,129 @@ class MainWindow(QMainWindow):
             cfg = SettingsDialog.get_settings()
             self._transcription.update_settings(cfg["asr_url"], cfg["asr_api_key"])
 
+    # ── Crash protection & autosave ────────────────────────────
+
+    def _setup_crash_handlers(self) -> None:
+        """Install handlers that help diagnose silent crashes."""
+        # faulthandler prints a Python traceback on SIGSEGV/SIGABRT/SIGFPE
+        crash_dir = Path.home() / "Documents" / "Meetily" / "crash_logs"
+        crash_dir.mkdir(parents=True, exist_ok=True)
+        crash_file = crash_dir / f"crash_{os.getpid()}.log"
+        try:
+            self._crash_fh = open(crash_file, "w")
+            faulthandler.enable(file=self._crash_fh, all_threads=True)
+            log.info("Crash handler writing to: %s", crash_file)
+        except Exception as e:
+            log.warning("Could not enable faulthandler: %s", e)
+            faulthandler.enable()  # fallback to stderr
+
+        # Catch unhandled exceptions
+        self._original_excepthook = sys.excepthook
+        sys.excepthook = self._excepthook
+
+    def _excepthook(self, exc_type, exc_value, exc_tb) -> None:
+        """Global exception handler — emergency-save before crashing."""
+        log.critical(
+            "Unhandled exception — attempting emergency save",
+            exc_info=(exc_type, exc_value, exc_tb),
+        )
+        try:
+            self._emergency_save()
+        except Exception as e:
+            log.error("Emergency save failed: %s", e)
+
+        # Dump debug report if monitor was active
+        if self._debug_monitor.is_running:
+            try:
+                path = self._debug_monitor.dump_report()
+                log.info("Debug report saved before crash: %s", path)
+            except Exception:
+                pass
+
+        # Call original hook
+        if self._original_excepthook:
+            self._original_excepthook(exc_type, exc_value, exc_tb)
+
+    def _emergency_save(self) -> None:
+        """Best-effort save of current transcript and audio on crash."""
+        if self._audio.state == RecordingState.IDLE:
+            return
+
+        log.warning("Emergency save: attempting to persist recording data")
+
+        transcript = self._transcript_panel.get_full_transcript()
+        segments = list(self._transcript_panel.get_raw_segments())
+
+        if not transcript and not segments:
+            log.warning("Emergency save: no transcript data to save")
+            return
+
+        try:
+            meeting = Meeting(
+                name=(self._name_input.text().strip() or "Untitled Meeting")
+                     + " (recovered)",
+                created_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                duration_secs=self._audio.get_recording_duration(),
+                wav_path="",
+                transcript_text=transcript,
+                transcript_segments=segments,
+            )
+            mid = self._db.save_meeting(meeting)
+            log.warning("Emergency save: transcript saved as meeting id=%d", mid)
+        except Exception as e:
+            # Last resort: write to a file
+            log.error("Emergency DB save failed: %s — writing to file", e)
+            try:
+                emergency_path = (
+                    Path.home() / "Documents" / "Meetily"
+                    / f"emergency_{int(time.time())}.txt"
+                )
+                emergency_path.write_text(transcript, encoding="utf-8")
+                log.warning("Emergency file save: %s", emergency_path)
+            except Exception:
+                pass
+
+    def _autosave_recording(self) -> None:
+        """Periodically save transcript to DB during recording (crash protection)."""
+        if self._audio.state != RecordingState.RECORDING:
+            return
+
+        transcript = self._transcript_panel.get_full_transcript()
+        segments = list(self._transcript_panel.get_raw_segments())
+        if not transcript:
+            return
+
+        try:
+            meeting_name = (
+                self._name_input.text().strip() or "Untitled Meeting"
+            )
+            if self._last_meeting_db_id:
+                # Update existing autosave record
+                self._db.update_transcript(
+                    self._last_meeting_db_id, transcript, segments
+                )
+                log.debug("Autosaved transcript (%d segments)", len(segments))
+            else:
+                # Create initial autosave record
+                meeting = Meeting(
+                    name=meeting_name + " (recording...)",
+                    created_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    duration_secs=self._audio.get_recording_duration(),
+                    transcript_text=transcript,
+                    transcript_segments=segments,
+                )
+                self._last_meeting_db_id = self._db.save_meeting(meeting)
+                log.info(
+                    "Autosave: created meeting id=%d", self._last_meeting_db_id
+                )
+                self._refresh_sidebar()
+        except Exception as e:
+            log.error("Autosave failed: %s", e)
+
+        # Update debug monitor transcript count
+        if self._debug_monitor.is_running:
+            self._debug_monitor.track_transcript_count(len(segments))
+
     # ── Recording control ───────────────────────────────────────
 
     def _toggle_recording(self) -> None:
@@ -442,7 +584,22 @@ class MainWindow(QMainWindow):
             meeting_name=meeting_name,
         )
 
+        # Start autosave timer
+        self._autosave_timer.start()
+
+        # Start debug monitor if in debug mode
+        if os.environ.get("MEETILY_DEBUG"):
+            self._debug_monitor.start()
+            self._debug_monitor.snapshot("recording_start")
+
     def _stop_recording(self) -> None:
+        # Stop autosave and debug monitor
+        self._autosave_timer.stop()
+        if self._debug_monitor.is_running:
+            self._debug_monitor.snapshot("recording_stop")
+            self._debug_monitor.dump_report()
+            self._debug_monitor.stop()
+
         # Disconnect audio chunk callback before stopping
         self._audio.on_audio_chunk = None
 
@@ -459,21 +616,35 @@ class MainWindow(QMainWindow):
 
         self._last_saved_path = saved_path
 
-        # Save to database
+        # Save to database — update autosave record if it exists, else create new
+        autosave_id = self._last_meeting_db_id
         self._last_meeting_db_id = None
         if saved_path or transcript:
             try:
-                meeting = Meeting(
-                    name=self._name_input.text().strip() or "Untitled Meeting",
-                    created_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
-                    duration_secs=self._audio.get_recording_duration(),
-                    wav_path=str(saved_path) if saved_path else "",
-                    transcript_text=transcript,
-                    transcript_segments=list(
-                        self._transcript_panel.get_raw_segments()
-                    ),
-                )
-                self._last_meeting_db_id = self._db.save_meeting(meeting)
+                segments = list(self._transcript_panel.get_raw_segments())
+                meeting_name = self._name_input.text().strip() or "Untitled Meeting"
+                if autosave_id:
+                    # Update the autosave record with final data
+                    self._db.update_transcript(autosave_id, transcript, segments)
+                    # Update name (remove " (recording...)" suffix) and wav_path
+                    conn = self._db._conn
+                    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    conn.execute(
+                        "UPDATE meetings SET name=?, wav_path=?, duration_secs=?, updated_at=? WHERE id=?",
+                        (meeting_name, str(saved_path) if saved_path else "", self._audio.get_recording_duration(), now, autosave_id),
+                    )
+                    conn.commit()
+                    self._last_meeting_db_id = autosave_id
+                else:
+                    meeting = Meeting(
+                        name=meeting_name,
+                        created_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                        duration_secs=self._audio.get_recording_duration(),
+                        wav_path=str(saved_path) if saved_path else "",
+                        transcript_text=transcript,
+                        transcript_segments=segments,
+                    )
+                    self._last_meeting_db_id = self._db.save_meeting(meeting)
                 self._refresh_sidebar()
             except Exception as e:
                 log.error("Failed to save meeting to DB: %s", e)
@@ -1026,8 +1197,22 @@ class MainWindow(QMainWindow):
             self._transcription.stop()
             self._transcription = None
 
+        # Stop debug monitor
+        if self._debug_monitor.is_running:
+            self._debug_monitor.dump_report()
+            self._debug_monitor.stop()
+
+        self._autosave_timer.stop()
         self._mic_bars.stop()
         self._sys_bars.stop()
         self._duration_timer.stop()
         self._db.close()
+
+        # Close crash log file handle
+        if hasattr(self, "_crash_fh"):
+            try:
+                self._crash_fh.close()
+            except Exception:
+                pass
+
         event.accept()

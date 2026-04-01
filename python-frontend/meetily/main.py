@@ -1,8 +1,17 @@
-"""Application entry point."""
+"""Application entry point.
+
+Launch with --debug or MEETILY_DEBUG=1 to enable:
+  - tracemalloc memory tracking
+  - DebugMonitor with periodic snapshots
+  - DEBUG-level logging
+  - faulthandler crash tracebacks to ~/Documents/Meetily/crash_logs/
+"""
 
 from __future__ import annotations
 
+import argparse
 import logging
+import os
 import sys
 
 from PySide6.QtGui import QFontDatabase, QFont, QIcon
@@ -14,9 +23,9 @@ from meetily.ui.theme import DARK_THEME
 from meetily.utils.paths import fonts_dir, icon_path
 
 
-def setup_logging() -> None:
+def setup_logging(debug: bool = False) -> None:
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG if debug else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
@@ -34,10 +43,35 @@ def _load_bundled_fonts() -> None:
             )
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Meetily — AI Meeting Assistant")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=bool(os.environ.get("MEETILY_DEBUG")),
+        help="Enable debug mode: verbose logging, memory tracking, crash diagnostics",
+    )
+    # Qt passes its own args; use parse_known_args to avoid conflicts
+    args, _ = parser.parse_known_args()
+    return args
+
+
 def main() -> None:
-    setup_logging()
+    args = parse_args()
+
+    # Set env var so other modules (MainWindow) can check it
+    if args.debug:
+        os.environ["MEETILY_DEBUG"] = "1"
+
+    setup_logging(debug=args.debug)
     log = logging.getLogger(__name__)
-    log.info("Starting Meetily")
+    log.info("Starting Meetily%s", " (DEBUG MODE)" if args.debug else "")
+
+    # Start memory tracing early in debug mode
+    if args.debug:
+        import tracemalloc
+        tracemalloc.start()
+        log.info("tracemalloc enabled")
 
     app = QApplication(sys.argv)
     app.setApplicationName("Meetily")

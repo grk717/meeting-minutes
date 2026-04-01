@@ -27,6 +27,8 @@ SAMPLE_RATE = 16_000  # 16 kHz — standard for speech
 CHANNELS = 1  # Mono for speech
 BLOCK_SIZE = 1024  # ~64ms at 16kHz
 LEVEL_SMOOTHING = 0.3  # EMA smoothing for level meter
+LEVEL_UPDATE_INTERVAL = 1.0 / 30  # Throttle level callbacks to ~30fps
+CHUNK_LOG_INTERVAL = 5000  # Log chunk stats every N chunks
 
 
 class RecordingState(enum.Enum):
@@ -147,6 +149,7 @@ class AudioManager:
 
         # Level metering (smoothed)
         self._levels = AudioLevels()
+        self._last_level_emit: float = 0.0
 
         # Callbacks
         self.on_levels_updated: Callable[[AudioLevels], None] | None = None
@@ -476,9 +479,29 @@ class AudioManager:
 
         with self._lock:
             self._mic_chunks.append(audio)
+            chunk_count = len(self._mic_chunks)
+            total_samples = sum(len(c) for c in self._mic_chunks)
 
         if self.on_audio_chunk:
             self.on_audio_chunk(audio)
+
+        # Periodic debug logging
+        if chunk_count % CHUNK_LOG_INTERVAL == 0:
+            mb_est = (total_samples * 4) / 1e6  # float32 = 4 bytes
+            duration = total_samples / SAMPLE_RATE
+            log.info(
+                "Mic buffer: %d chunks, %.1fs, ~%.1fMB",
+                chunk_count, duration, mb_est,
+            )
+
+        # Debug monitor integration
+        try:
+            from meetily.debug import DebugMonitor
+            mon = DebugMonitor.instance()
+            if mon.is_running:
+                mon.track_chunks("mic", chunk_count, total_samples)
+        except Exception:
+            pass
 
         # Update levels (fast path, no lock needed for atomic float writes)
         rms = float(np.sqrt(np.mean(audio**2)))
@@ -486,7 +509,10 @@ class AudioManager:
         self._levels.mic_rms = self._levels.mic_rms * LEVEL_SMOOTHING + rms * (1 - LEVEL_SMOOTHING)
         self._levels.mic_peak = max(peak, self._levels.mic_peak * 0.95)
 
-        if self.on_levels_updated:
+        # Throttle level updates to ~30fps to avoid flooding Qt event queue
+        now = time.monotonic()
+        if self.on_levels_updated and (now - self._last_level_emit) >= LEVEL_UPDATE_INTERVAL:
+            self._last_level_emit = now
             self.on_levels_updated(self._levels)
 
     def _sys_callback(
@@ -505,16 +531,39 @@ class AudioManager:
 
         with self._lock:
             self._sys_chunks.append(audio)
+            chunk_count = len(self._sys_chunks)
+            total_samples = sum(len(c) for c in self._sys_chunks)
 
         if self.on_audio_chunk:
             self.on_audio_chunk(audio)
+
+        # Periodic debug logging
+        if chunk_count % CHUNK_LOG_INTERVAL == 0:
+            mb_est = (total_samples * 4) / 1e6
+            duration = total_samples / SAMPLE_RATE
+            log.info(
+                "Sys buffer: %d chunks, %.1fs, ~%.1fMB",
+                chunk_count, duration, mb_est,
+            )
+
+        # Debug monitor integration
+        try:
+            from meetily.debug import DebugMonitor
+            mon = DebugMonitor.instance()
+            if mon.is_running:
+                mon.track_chunks("sys", chunk_count, total_samples)
+        except Exception:
+            pass
 
         rms = float(np.sqrt(np.mean(audio**2)))
         peak = float(np.max(np.abs(audio)))
         self._levels.system_rms = self._levels.system_rms * LEVEL_SMOOTHING + rms * (1 - LEVEL_SMOOTHING)
         self._levels.system_peak = max(peak, self._levels.system_peak * 0.95)
 
-        if self.on_levels_updated:
+        # Throttle level updates (same as mic callback)
+        now = time.monotonic()
+        if self.on_levels_updated and (now - self._last_level_emit) >= LEVEL_UPDATE_INTERVAL:
+            self._last_level_emit = now
             self.on_levels_updated(self._levels)
 
     def _loopback_data_callback(self, audio: np.ndarray) -> None:
@@ -526,16 +575,30 @@ class AudioManager:
 
         with self._lock:
             self._sys_chunks.append(audio_copy)
+            chunk_count = len(self._sys_chunks)
+            total_samples = sum(len(c) for c in self._sys_chunks)
 
         if self.on_audio_chunk:
             self.on_audio_chunk(audio_copy)
+
+        # Debug monitor integration
+        try:
+            from meetily.debug import DebugMonitor
+            mon = DebugMonitor.instance()
+            if mon.is_running:
+                mon.track_chunks("sys", chunk_count, total_samples)
+        except Exception:
+            pass
 
         rms = float(np.sqrt(np.mean(audio**2)))
         peak = float(np.max(np.abs(audio)))
         self._levels.system_rms = self._levels.system_rms * LEVEL_SMOOTHING + rms * (1 - LEVEL_SMOOTHING)
         self._levels.system_peak = max(peak, self._levels.system_peak * 0.95)
 
-        if self.on_levels_updated:
+        # Throttle level updates
+        now = time.monotonic()
+        if self.on_levels_updated and (now - self._last_level_emit) >= LEVEL_UPDATE_INTERVAL:
+            self._last_level_emit = now
             self.on_levels_updated(self._levels)
 
     # ── Audio saving ────────────────────────────────────────────
