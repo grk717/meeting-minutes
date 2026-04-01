@@ -344,7 +344,7 @@ class AudioManager:
 
         # Prepare save directory
         if save_dir is None:
-            save_dir = Path.home() / "Documents" / "Meetily"
+            save_dir = Path.home() / "Documents" / "ZennoCall"
         save_dir.mkdir(parents=True, exist_ok=True)
         self._save_path = save_dir
 

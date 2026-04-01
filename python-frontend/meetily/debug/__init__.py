@@ -1,4 +1,4 @@
-"""Debug and diagnostics utilities for Meetily."""
+"""Debug and diagnostics utilities for ZennoCall."""
 
 from meetily.debug.monitor import DebugMonitor
 

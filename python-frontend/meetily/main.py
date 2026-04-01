@@ -4,7 +4,7 @@ Launch with --debug or MEETILY_DEBUG=1 to enable:
   - tracemalloc memory tracking
   - DebugMonitor with periodic snapshots
   - DEBUG-level logging
-  - faulthandler crash tracebacks to ~/Documents/Meetily/crash_logs/
+  - faulthandler crash tracebacks to ~/Documents/ZennoCall/crash_logs/
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def _load_bundled_fonts() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Meetily — AI Meeting Assistant")
+    parser = argparse.ArgumentParser(description="ZennoCall — AI Meeting Assistant")
     parser.add_argument(
         "--debug",
         action="store_true",
@@ -65,7 +65,7 @@ def main() -> None:
 
     setup_logging(debug=args.debug)
     log = logging.getLogger(__name__)
-    log.info("Starting Meetily%s", " (DEBUG MODE)" if args.debug else "")
+    log.info("Starting ZennoCall%s", " (DEBUG MODE)" if args.debug else "")
 
     # Start memory tracing early in debug mode
     if args.debug:
@@ -74,8 +74,8 @@ def main() -> None:
         log.info("tracemalloc enabled")
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Meetily")
-    app.setOrganizationName("Meetily")
+    app.setApplicationName("ZennoCall")
+    app.setOrganizationName("ZennoCall")
 
     # Set application icon
     _icon = icon_path()

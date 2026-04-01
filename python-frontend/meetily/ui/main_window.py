@@ -103,7 +103,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Meetily")
+        self.setWindowTitle("ZennoCall")
         self.setMinimumSize(700, 500)
         self.resize(1440, 800)
 
@@ -190,13 +190,13 @@ class MainWindow(QMainWindow):
         # ── Header bar ──
         header_bar = QWidget()
         header_bar.setStyleSheet(
-            "background-color: #0a1018; border-bottom: 1px solid #172230;"
+            "background-color: #0a1018;"
         )
         header_layout = QHBoxLayout(header_bar)
         header_layout.setContentsMargins(20, 12, 20, 12)
         header_layout.setSpacing(8)
 
-        app_title = QLabel("Meetily")
+        app_title = QLabel("ZennoCall")
         app_title.setObjectName("appTitle")
         header_layout.addWidget(app_title)
 
@@ -436,7 +436,7 @@ class MainWindow(QMainWindow):
     def _setup_crash_handlers(self) -> None:
         """Install handlers that help diagnose silent crashes."""
         # faulthandler prints a Python traceback on SIGSEGV/SIGABRT/SIGFPE
-        crash_dir = Path.home() / "Documents" / "Meetily" / "crash_logs"
+        crash_dir = Path.home() / "Documents" / "ZennoCall" / "crash_logs"
         crash_dir.mkdir(parents=True, exist_ok=True)
         crash_file = crash_dir / f"crash_{os.getpid()}.log"
         try:
@@ -505,7 +505,7 @@ class MainWindow(QMainWindow):
             log.error("Emergency DB save failed: %s — writing to file", e)
             try:
                 emergency_path = (
-                    Path.home() / "Documents" / "Meetily"
+                    Path.home() / "Documents" / "ZennoCall"
                     / f"emergency_{int(time.time())}.txt"
                 )
                 emergency_path.write_text(transcript, encoding="utf-8")

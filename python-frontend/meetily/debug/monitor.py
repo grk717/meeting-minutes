@@ -220,7 +220,7 @@ class DebugMonitor:
     def dump_report(self, path: Path | None = None) -> Path:
         """Write a JSON report of all snapshots to disk."""
         if path is None:
-            path = Path.home() / "Documents" / "Meetily" / "debug_reports"
+            path = Path.home() / "Documents" / "ZennoCall" / "debug_reports"
         path.mkdir(parents=True, exist_ok=True)
 
         filename = f"debug_{time.strftime('%Y%m%d_%H%M%S')}.json"

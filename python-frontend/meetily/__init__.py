@@ -1,1 +1,1 @@
-"""Meetily - Privacy-first AI meeting assistant."""
+"""ZennoCall - Privacy-first AI meeting assistant."""

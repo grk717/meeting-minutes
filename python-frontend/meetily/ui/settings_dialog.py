@@ -130,7 +130,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(backend_section)
 
         backend_desc = QLabel(
-            "Meetily backend server for retranscription queue and meeting storage."
+            "ZennoCall backend server for retranscription queue and meeting storage."
         )
         backend_desc.setObjectName("settingsDesc")
         backend_desc.setWordWrap(True)
@@ -152,7 +152,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(buttons)
 
     def _save(self) -> None:
-        settings = QSettings("Meetily", "Meetily")
+        settings = QSettings("ZennoCall", "ZennoCall")
         settings.setValue("asr_url", self._url_input.text().strip())
         settings.setValue("asr_api_key", self._key_input.text().strip())
         settings.setValue("llm_url", self._llm_url_input.text().strip())
@@ -164,7 +164,7 @@ class SettingsDialog(QDialog):
     @staticmethod
     def get_settings() -> dict[str, str]:
         """Load saved settings with defaults."""
-        settings = QSettings("Meetily", "Meetily")
+        settings = QSettings("ZennoCall", "ZennoCall")
         return {
             "asr_url": settings.value("asr_url", _DEFAULTS["asr_url"]),
             "asr_api_key": settings.value("asr_api_key", _DEFAULTS["asr_api_key"]),

@@ -38,7 +38,7 @@ class MeetingDatabase:
 
     def __init__(self, db_path: Path | None = None) -> None:
         if db_path is None:
-            db_path = Path.home() / "Documents" / "Meetily" / "meetily.db"
+            db_path = Path.home() / "Documents" / "ZennoCall" / "zennocall.db"
         self._db_path = db_path
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn: sqlite3.Connection | None = None
