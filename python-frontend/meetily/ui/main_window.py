@@ -240,7 +240,6 @@ class MainWindow(QMainWindow):
 
         # ── Recording controls section (scrollable) ──
         self._rec_widget = QWidget()
-        self._rec_widget.setMinimumHeight(280)
         rec_outer = QVBoxLayout(self._rec_widget)
         rec_outer.setContentsMargins(0, 0, 0, 0)
         rec_outer.setSpacing(0)
@@ -384,19 +383,10 @@ class MainWindow(QMainWindow):
         self._rec_scroll.setWidget(rec_scroll_content)
         rec_outer.addWidget(self._rec_scroll)
 
-        # ── Vertical splitter: recording controls | transcript+summary ──
-        self._vertical_splitter = QSplitter(Qt.Orientation.Vertical)
-        self._vertical_splitter.setChildrenCollapsible(False)
-        self._vertical_splitter.setHandleWidth(5)
-        self._vertical_splitter.setStyleSheet(
-            "QSplitter::handle { background: transparent; }"
-        )
-
-        self._vertical_splitter.addWidget(self._rec_widget)
+        right_layout.addWidget(self._rec_widget)
 
         # ── Content area: Transcript + Summary with visible splitter ──
         content_wrapper = QWidget()
-        content_wrapper.setMinimumHeight(120)
         content_wrapper_layout = QVBoxLayout(content_wrapper)
         content_wrapper_layout.setContentsMargins(16, 12, 16, 16)
         content_wrapper_layout.setSpacing(0)
@@ -429,13 +419,7 @@ class MainWindow(QMainWindow):
 
         content_wrapper_layout.addWidget(self._content_splitter)
 
-        self._vertical_splitter.addWidget(content_wrapper)
-
-        # Recording controls: don't stretch, content: stretches
-        self._vertical_splitter.setStretchFactor(0, 0)
-        self._vertical_splitter.setStretchFactor(1, 1)
-
-        right_layout.addWidget(self._vertical_splitter, 1)
+        right_layout.addWidget(content_wrapper, 1)  # stretch=1: takes remaining space
 
         self._splitter.addWidget(right_pane)
         self._splitter.setStretchFactor(0, 0)  # sidebar: minimal stretch
