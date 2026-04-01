@@ -1,0 +1,90 @@
+{
+  "system": {
+    "platform": "Windows-10-10.0.19045-SP0",
+    "python": "3.10.10 (tags/v3.10.10:aad5f6a, Feb  7 2023, 17:20:36) [MSC v.1929 64 bit (AMD64)]",
+    "pid": 37816
+  },
+  "summary": {
+    "duration_secs": 20.4,
+    "total_snapshots": 6,
+    "level_updates_total": 0,
+    "level_updates_dropped": 0,
+    "peak_mem_mb": 5.524498,
+    "peak_mic_chunks": 318,
+    "peak_sys_chunks": 157
+  },
+  "snapshots": [
+    {
+      "elapsed_s": 0.0,
+      "mem_mb": 0.9,
+      "mem_peak_mb": 1.0,
+      "mic_chunks": 0,
+      "sys_chunks": 0,
+      "mic_samples_k": 0.0,
+      "sys_samples_k": 0.0,
+      "transcripts": 0,
+      "threads": 6,
+      "notes": ""
+    },
+    {
+      "elapsed_s": 0.0,
+      "mem_mb": 0.9,
+      "mem_peak_mb": 1.0,
+      "mic_chunks": 0,
+      "sys_chunks": 0,
+      "mic_samples_k": 0.0,
+      "sys_samples_k": 0.0,
+      "transcripts": 0,
+      "threads": 6,
+      "notes": "recording_start"
+    },
+    {
+      "elapsed_s": 5.4,
+      "mem_mb": 2.2,
+      "mem_peak_mb": 2.2,
+      "mic_chunks": 83,
+      "sys_chunks": 107,
+      "mic_samples_k": 85.0,
+      "sys_samples_k": 85.6,
+      "transcripts": 0,
+      "threads": 6,
+      "notes": ""
+    },
+    {
+      "elapsed_s": 10.8,
+      "mem_mb": 3.3,
+      "mem_peak_mb": 3.3,
+      "mic_chunks": 168,
+      "sys_chunks": 157,
+      "mic_samples_k": 172.0,
+      "sys_samples_k": 125.6,
+      "transcripts": 0,
+      "threads": 5,
+      "notes": ""
+    },
+    {
+      "elapsed_s": 16.2,
+      "mem_mb": 4.0,
+      "mem_peak_mb": 5.5,
+      "mic_chunks": 252,
+      "sys_chunks": 157,
+      "mic_samples_k": 258.0,
+      "sys_samples_k": 125.6,
+      "transcripts": 0,
+      "threads": 6,
+      "notes": ""
+    },
+    {
+      "elapsed_s": 20.4,
+      "mem_mb": 4.3,
+      "mem_peak_mb": 5.5,
+      "mic_chunks": 318,
+      "sys_chunks": 157,
+      "mic_samples_k": 325.6,
+      "sys_samples_k": 125.6,
+      "transcripts": 0,
+      "threads": 6,
+      "notes": "recording_stop"
+    }
+  ]
+}

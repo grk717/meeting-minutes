@@ -4,6 +4,16 @@ Standard PortAudio (sounddevice) cannot capture system audio on Windows.
 PyAudioWPatch is a fork of PyAudio that exposes WASAPI loopback mode,
 which captures whatever is playing through an output device (speakers).
 
+CRASH PREVENTION: WASAPI loopback handles can become invalid when audio
+devices disconnect (Bluetooth off, USB unplug, display sleep, audio
+service restart). Calling read()/close() on a dead handle triggers a
+C-level access violation (segfault) that kills the ENTIRE process —
+threads cannot isolate this.
+
+The fix: all PyAudioWPatch I/O runs in a **child process** via
+multiprocessing. If the child segfaults, the parent detects the exit
+and continues safely with microphone-only recording.
+
 This module provides:
 - list_output_devices(): discover speakers/headphones to capture from
 - LoopbackStream: a capture stream that records from an output device
@@ -12,8 +22,10 @@ This module provides:
 from __future__ import annotations
 
 import logging
+import multiprocessing
 import platform
 import threading
+import time
 from dataclasses import dataclass
 from typing import Callable
 
@@ -135,18 +147,162 @@ def _find_loopback_device(pa, output_device_index: int) -> dict | None:
     return None
 
 
+# ── Child process function ──────────────────────────────────
+
+def _loopback_worker(
+    device_index: int | None,
+    target_rate: int,
+    audio_queue: multiprocessing.Queue,
+    stop_event: multiprocessing.Event,
+) -> None:
+    """Runs in a child process. All PyAudioWPatch I/O happens here.
+
+    If the WASAPI handle dies and read() segfaults, only THIS process
+    dies — the parent continues safely.
+
+    Sends audio chunks as (numpy bytes, shape, dtype) tuples through
+    the queue. Sends None as a sentinel when stopping.
+    """
+    import pyaudiowpatch as pa_mod
+
+    pa = pa_mod.PyAudio()
+    stream = None
+
+    try:
+        # Resolve device
+        if device_index is not None:
+            output_info = pa.get_device_info_by_index(device_index)
+        else:
+            # Find default output
+            for i in range(pa.get_host_api_count()):
+                api_info = pa.get_host_api_info_by_index(i)
+                if "wasapi" in api_info["name"].lower():
+                    wasapi_info = pa.get_host_api_info_by_index(i)
+                    default_idx = wasapi_info.get("defaultOutputDevice", -1)
+                    if default_idx >= 0:
+                        output_info = pa.get_device_info_by_index(default_idx)
+                        break
+            else:
+                audio_queue.put(("error", "No WASAPI output device found"))
+                return
+
+        # Find loopback device
+        loopback_info = _find_loopback_device(pa, output_info["index"])
+
+        if loopback_info is not None:
+            capture_info = loopback_info
+            use_as_loopback = False
+        else:
+            capture_info = output_info
+            use_as_loopback = True
+
+        device_rate = int(capture_info["defaultSampleRate"])
+        device_channels = max(
+            capture_info.get("maxInputChannels", 0),
+            capture_info.get("maxOutputChannels", 0),
+        )
+        if device_channels == 0:
+            device_channels = 2
+
+        frames_per_buffer = int(device_rate * 0.05)  # 50ms
+
+        open_kwargs = dict(
+            format=pa_mod.paFloat32,
+            channels=device_channels,
+            rate=device_rate,
+            input=True,
+            input_device_index=capture_info["index"],
+            frames_per_buffer=frames_per_buffer,
+        )
+        if use_as_loopback:
+            open_kwargs["as_loopback"] = True
+
+        stream = pa.open(**open_kwargs)
+
+        # Signal successful start
+        audio_queue.put(("started", device_rate, device_channels))
+
+        frames_per_read = frames_per_buffer
+        consecutive_errors = 0
+
+        while not stop_event.is_set():
+            try:
+                raw = stream.read(frames_per_read, exception_on_overflow=False)
+                consecutive_errors = 0
+
+                audio = np.frombuffer(raw, dtype=np.float32)
+                if len(audio) == 0:
+                    continue
+
+                # Downmix to mono
+                if device_channels > 1:
+                    try:
+                        audio = audio.reshape(-1, device_channels).mean(axis=1)
+                    except ValueError:
+                        audio = audio[::device_channels]
+
+                # Resample to target rate
+                if device_rate != target_rate:
+                    ratio = target_rate / device_rate
+                    new_len = max(1, int(len(audio) * ratio))
+                    indices = np.linspace(0, len(audio) - 1, new_len)
+                    audio = np.interp(indices, np.arange(len(audio)), audio).astype(
+                        np.float32
+                    )
+
+                # Boost quiet loopback audio
+                peak = np.max(np.abs(audio))
+                if peak > 1e-6:
+                    gain = min(0.8 / peak, 10.0)
+                    if gain > 1.5:
+                        audio = audio * gain
+
+                # Send via queue — use tobytes() for pickling efficiency
+                try:
+                    audio_queue.put_nowait(("audio", audio.tobytes(), len(audio)))
+                except Exception:
+                    pass  # queue full, drop frame
+
+            except OSError:
+                consecutive_errors += 1
+                if consecutive_errors >= 5:
+                    audio_queue.put(("error", "Too many WASAPI read errors"))
+                    break
+
+    except Exception as e:
+        try:
+            audio_queue.put(("error", str(e)))
+        except Exception:
+            pass
+    finally:
+        if stream is not None:
+            try:
+                stream.stop_stream()
+            except Exception:
+                pass
+            try:
+                stream.close()
+            except Exception:
+                pass
+        try:
+            pa.terminate()
+        except Exception:
+            pass
+
+
 class LoopbackStream:
     """Captures audio from a Windows output device via WASAPI loopback.
 
-    Uses a polling thread instead of a callback to avoid PyAudio callback
-    issues with WASAPI loopback mode.
+    All WASAPI I/O runs in a child process to isolate access violations.
+    If the child crashes (device disconnected), the parent continues
+    safely with microphone-only recording.
 
     Usage:
         stream = LoopbackStream(device_index=5, target_rate=16000)
         stream.on_data = lambda audio_f32: process(audio_f32)
         stream.start()
         ...
-        stream.stop()
+        stream.close()
     """
 
     def __init__(
@@ -157,239 +313,152 @@ class LoopbackStream:
         if _pyaudio is None:
             raise RuntimeError("PyAudioWPatch not available")
 
-        self._pa = _pyaudio.PyAudio()
-        self._stream = None
-        self._running = False
+        self._device_index = device_index
         self._target_rate = target_rate
-        self._thread: threading.Thread | None = None
-
-        # Resolve output device
-        if device_index is not None:
-            self._output_info = self._pa.get_device_info_by_index(device_index)
-        else:
-            dev = get_default_output_device()
-            if dev is None:
-                raise RuntimeError("No output device found for loopback")
-            self._output_info = self._pa.get_device_info_by_index(dev.index)
-
-        # Try to find the corresponding loopback input device
-        self._loopback_info = _find_loopback_device(self._pa, self._output_info["index"])
-
-        if self._loopback_info is not None:
-            # Use the dedicated loopback device (preferred)
-            self._capture_info = self._loopback_info
-            self._use_as_loopback_flag = False
-            log.info(
-                "Found loopback device: '%s' (%dHz, %dch)",
-                self._capture_info["name"],
-                int(self._capture_info["defaultSampleRate"]),
-                self._capture_info["maxInputChannels"],
-            )
-        else:
-            # Fall back to as_loopback flag on the output device itself
-            self._capture_info = self._output_info
-            self._use_as_loopback_flag = True
-            log.info(
-                "No dedicated loopback device found, using as_loopback flag on '%s'",
-                self._output_info["name"],
-            )
-
-        self._device_rate = int(self._capture_info["defaultSampleRate"])
-        self._device_channels = max(
-            self._capture_info.get("maxInputChannels", 0),
-            self._capture_info.get("maxOutputChannels", 0),
-        )
-        if self._device_channels == 0:
-            self._device_channels = 2  # Fallback to stereo
+        self._process: multiprocessing.Process | None = None
+        self._audio_queue: multiprocessing.Queue | None = None
+        self._stop_event: multiprocessing.Event | None = None
+        self._reader_thread: threading.Thread | None = None
+        self._running = False
 
         # Callback for captured audio (mono float32 at target_rate)
         self.on_data: Callable[[np.ndarray], None] | None = None
         # Callback for errors (string message)
         self.on_error: Callable[[str], None] | None = None
 
-        log.info(
-            "LoopbackStream configured: '%s' (%dHz, %dch -> %dHz mono)",
-            self._capture_info["name"],
-            self._device_rate,
-            self._device_channels,
-            self._target_rate,
-        )
-
     def start(self) -> None:
-        """Start capturing loopback audio via polling thread."""
+        """Start the loopback capture subprocess."""
         if self._running:
             return
 
-        # Calculate frames per buffer (~50ms chunks)
-        frames_per_buffer = int(self._device_rate * 0.05)
+        self._audio_queue = multiprocessing.Queue(maxsize=200)
+        self._stop_event = multiprocessing.Event()
 
-        open_kwargs = dict(
-            format=_pyaudio.paFloat32,
-            channels=self._device_channels,
-            rate=self._device_rate,
-            input=True,
-            input_device_index=self._capture_info["index"],
-            frames_per_buffer=frames_per_buffer,
+        self._process = multiprocessing.Process(
+            target=_loopback_worker,
+            args=(
+                self._device_index,
+                self._target_rate,
+                self._audio_queue,
+                self._stop_event,
+            ),
+            daemon=True,
+            name="loopback-worker",
         )
+        self._process.start()
+        log.info("Loopback worker process started (pid=%d)", self._process.pid)
 
-        # Only use as_loopback if we don't have a dedicated loopback device
-        if self._use_as_loopback_flag:
-            open_kwargs["as_loopback"] = True
+        # Wait for the "started" message or an error
+        try:
+            msg = self._audio_queue.get(timeout=5.0)
+            if msg[0] == "error":
+                raise RuntimeError(f"Loopback worker failed: {msg[1]}")
+            if msg[0] == "started":
+                log.info(
+                    "Loopback capture active: %dHz %dch -> %dHz mono",
+                    msg[1], msg[2], self._target_rate,
+                )
+        except Exception as e:
+            self._cleanup()
+            raise RuntimeError(f"Loopback worker did not start: {e}") from e
 
-        self._stream = self._pa.open(**open_kwargs)
         self._running = True
 
-        # Use polling thread — more reliable than callbacks for WASAPI loopback
-        self._thread = threading.Thread(
-            target=self._read_loop,
-            name="loopback-reader",
+        # Start a thread that reads from the queue and calls on_data
+        self._reader_thread = threading.Thread(
+            target=self._queue_reader,
             daemon=True,
+            name="loopback-queue-reader",
         )
-        self._thread.start()
-        log.info("Loopback stream started (polling mode, %d frames/buffer)", frames_per_buffer)
+        self._reader_thread.start()
 
-    def _read_loop(self) -> None:
-        """Polling loop that reads from the loopback stream.
-
-        WASAPI loopback streams can crash with an access violation
-        (segfault) when the audio device becomes invalid — for example
-        when Bluetooth headphones disconnect, the display sleeps, or
-        the Windows audio service restarts.
-
-        The segfault happens inside the C call to pa.read() and CANNOT
-        be caught by Python exception handling. is_active() also lies —
-        it returns True even after the handle is corrupted.
-
-        The only reliable defense is to run read() in a disposable
-        sub-thread with a short timeout. If read() hangs or segfaults,
-        only the sub-thread dies — the reader loop detects the timeout
-        and exits cleanly.
-        """
-        frames_per_read = int(self._device_rate * 0.05)  # 50ms chunks
-        consecutive_errors = 0
-        max_consecutive_errors = 5
-        read_timeout = 2.0  # seconds — a 50ms read should never take this long
-
-        while self._running and self._stream is not None:
+    def _queue_reader(self) -> None:
+        """Reads audio chunks from the child process queue and calls on_data."""
+        while self._running:
             try:
-                if not self._stream.is_active():
-                    if self._running:
-                        log.warning("Loopback stream no longer active — stopping reader")
-                        self._notify_error(
-                            "System audio stream stopped unexpectedly. "
-                            "The audio device may have disconnected."
-                        )
-                    break
-
-                # Run read() in a sub-thread so a segfault or hang
-                # kills only the sub-thread, not the whole process.
-                raw = self._guarded_read(frames_per_read, read_timeout)
-                if raw is None:
-                    # read() timed out or the stream was killed
+                msg = self._audio_queue.get(timeout=1.0)
+            except Exception:
+                # Timeout — check if process is still alive
+                if self._process is not None and not self._process.is_alive():
+                    exit_code = self._process.exitcode
                     if self._running:
                         log.error(
-                            "Loopback read timed out (%.1fs) — "
-                            "WASAPI handle likely dead, stopping to prevent crash",
-                            read_timeout,
+                            "Loopback worker process died (exit code %s) — "
+                            "audio device may have disconnected",
+                            exit_code,
                         )
                         self._notify_error(
-                            "System audio device stopped responding. "
+                            "System audio capture stopped unexpectedly. "
+                            "The audio device may have disconnected. "
                             "Microphone recording continues."
                         )
+                    self._running = False
                     break
+                continue
 
-                consecutive_errors = 0
-
-                # Convert bytes to float32 numpy
-                audio = np.frombuffer(raw, dtype=np.float32)
-
-                if len(audio) == 0:
-                    continue
-
-                # Downmix to mono if multi-channel
-                if self._device_channels > 1:
-                    try:
-                        audio = audio.reshape(-1, self._device_channels).mean(axis=1)
-                    except ValueError:
-                        audio = audio[::self._device_channels]
-
-                # Resample to target rate if needed
-                if self._device_rate != self._target_rate:
-                    ratio = self._target_rate / self._device_rate
-                    new_len = max(1, int(len(audio) * ratio))
-                    indices = np.linspace(0, len(audio) - 1, new_len)
-                    audio = np.interp(indices, np.arange(len(audio)), audio).astype(
-                        np.float32
-                    )
-
-                # Boost loopback audio — WASAPI loopback often delivers
-                # very quiet signals (0.01-0.1 range).
-                peak = np.max(np.abs(audio))
-                if peak > 1e-6:
-                    gain = min(0.8 / peak, 10.0)
-                    if gain > 1.5:
-                        audio = audio * gain
-
+            if msg[0] == "audio":
+                audio = np.frombuffer(msg[1], dtype=np.float32).copy()
                 if self.on_data is not None:
                     self.on_data(audio)
 
-            except OSError as e:
-                if self._running:
-                    consecutive_errors += 1
-                    log.warning(
-                        "Loopback read error (%d/%d): %s",
-                        consecutive_errors, max_consecutive_errors, e,
-                    )
-                    if consecutive_errors >= max_consecutive_errors:
-                        log.error(
-                            "Too many consecutive loopback read errors — "
-                            "stopping capture to prevent crash"
-                        )
-                        self._notify_error(
-                            "System audio capture stopped: too many read errors. "
-                            "Microphone recording continues."
-                        )
-                        break
-            except Exception as e:
-                if self._running:
-                    log.error("Loopback read error: %s", e)
-                    self._notify_error(f"System audio error: {e}")
+            elif msg[0] == "error":
+                log.warning("Loopback worker error: %s", msg[1])
+                self._notify_error(f"System audio error: {msg[1]}")
+                self._running = False
                 break
 
-        log.info("Loopback read loop exited")
+        log.info("Loopback queue reader exited")
 
-    def _guarded_read(self, frames: int, timeout: float) -> bytes | None:
-        """Run stream.read() in a disposable thread with a timeout.
+    def stop(self) -> None:
+        """Stop the loopback capture."""
+        self._running = False
 
-        If the WASAPI handle is corrupted, read() will either:
-          (a) segfault — kills only the sub-thread (daemon), or
-          (b) hang forever — we detect via timeout and abandon it.
+        # Signal the child process to stop
+        if self._stop_event is not None:
+            self._stop_event.set()
 
-        Returns the raw bytes on success, or None on timeout/failure.
-        """
-        # Capture a local reference — stop() may set self._stream = None
-        stream = self._stream
-        if stream is None:
-            return None
+        # Wait for reader thread
+        if self._reader_thread is not None:
+            self._reader_thread.join(timeout=2.0)
+            self._reader_thread = None
 
-        result: list[bytes | None] = [None]
+        self._cleanup()
 
-        def _do_read():
+    def _cleanup(self) -> None:
+        """Terminate the child process and drain the queue."""
+        if self._process is not None:
+            # Give it a moment to exit cleanly
+            self._process.join(timeout=2.0)
+            if self._process.is_alive():
+                log.warning("Loopback worker did not exit — terminating")
+                try:
+                    self._process.terminate()
+                    self._process.join(timeout=1.0)
+                except Exception:
+                    pass
+                if self._process.is_alive():
+                    try:
+                        self._process.kill()
+                    except Exception:
+                        pass
+            log.info("Loopback worker process ended (exit code %s)", self._process.exitcode)
+            self._process = None
+
+        # Drain and close the queue
+        if self._audio_queue is not None:
             try:
-                result[0] = stream.read(frames, exception_on_overflow=False)
+                while not self._audio_queue.empty():
+                    self._audio_queue.get_nowait()
+                self._audio_queue.close()
             except Exception:
-                result[0] = None
+                pass
+            self._audio_queue = None
 
-        t = threading.Thread(target=_do_read, daemon=True)
-        t.start()
-        t.join(timeout=timeout)
+        self._stop_event = None
 
-        if t.is_alive():
-            # read() is hung or segfaulted in the sub-thread.
-            # The daemon thread will be cleaned up on process exit.
-            return None
-
-        return result[0]
+    def close(self) -> None:
+        """Release resources."""
+        self.stop()
 
     def _notify_error(self, message: str) -> None:
         """Safely invoke the on_error callback."""
@@ -398,53 +467,3 @@ class LoopbackStream:
                 self.on_error(message)
             except Exception:
                 pass
-
-    def stop(self) -> None:
-        """Stop capturing.
-
-        Sets _running=False so the read loop exits on its next iteration,
-        then waits for the reader thread to finish. Stream teardown
-        (stop_stream/close) runs in a daemon thread with a timeout
-        because these calls can also hang on a dead WASAPI handle.
-        """
-        self._running = False
-
-        # Wait for the read loop to notice _running=False and exit.
-        # The _guarded_read timeout is 2s, so the loop will check
-        # _running within at most ~2s.
-        if self._thread is not None:
-            self._thread.join(timeout=5.0)
-            if self._thread.is_alive():
-                log.warning("Loopback reader thread did not exit — abandoning")
-            self._thread = None
-
-        # Now tear down the stream. The read loop is no longer using it.
-        if self._stream is not None:
-            stream_ref = self._stream
-            self._stream = None
-
-            def _do_close():
-                try:
-                    stream_ref.stop_stream()
-                except Exception as e:
-                    log.debug("Error in stop_stream: %s", e)
-                try:
-                    stream_ref.close()
-                except Exception as e:
-                    log.debug("Error in close: %s", e)
-
-            closer = threading.Thread(target=_do_close, daemon=True)
-            closer.start()
-            closer.join(timeout=2.0)
-            if closer.is_alive():
-                log.warning("Loopback stream close timed out — abandoning handle")
-
-    def close(self) -> None:
-        """Release resources."""
-        self.stop()
-        if self._pa is not None:
-            try:
-                self._pa.terminate()
-            except Exception as e:
-                log.debug("Error terminating PyAudio: %s", e)
-            self._pa = None

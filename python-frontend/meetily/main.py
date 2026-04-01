@@ -106,4 +106,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Required for multiprocessing on Windows (PyInstaller and spawn mode)
+    import multiprocessing
+    multiprocessing.freeze_support()
     main()
