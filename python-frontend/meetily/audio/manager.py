@@ -429,7 +429,8 @@ class AudioManager:
 
         if self._loopback_stream is not None:
             try:
-                self._loopback_stream.close()
+                # stop() is non-blocking — cleanup runs in background thread
+                self._loopback_stream.stop()
             except Exception as e:
                 log.warning("Error stopping loopback stream: %s", e)
             self._loopback_stream = None
@@ -481,8 +482,8 @@ class AudioManager:
             self._mic_stream.stop()
         if self._sys_stream:
             self._sys_stream.stop()
-        if self._loopback_stream:
-            self._loopback_stream.stop()
+        # Loopback subprocess: don't stop/start — the _loopback_data_callback
+        # already ignores data when state != RECORDING
         self._set_state(RecordingState.PAUSED)
 
     def resume_recording(self) -> None:
@@ -493,8 +494,6 @@ class AudioManager:
             self._mic_stream.start()
         if self._sys_stream:
             self._sys_stream.start()
-        if self._loopback_stream:
-            self._loopback_stream.start()
         self._set_state(RecordingState.RECORDING)
 
     # ── Audio callbacks (called from audio thread) ──────────────

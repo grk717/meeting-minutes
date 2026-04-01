@@ -410,51 +410,68 @@ class LoopbackStream:
         log.info("Loopback queue reader exited")
 
     def stop(self) -> None:
-        """Stop the loopback capture."""
+        """Stop the loopback capture. Non-blocking — cleanup runs in background."""
+        if not self._running and self._process is None:
+            return
+
         self._running = False
 
         # Signal the child process to stop
         if self._stop_event is not None:
             self._stop_event.set()
 
-        # Wait for reader thread
+        # Reader thread checks self._running every 1s, so it will exit soon.
+        # Don't join it here — let _cleanup_async handle everything off-thread.
+
+        # Run all cleanup in a background thread so the caller (main thread)
+        # doesn't freeze waiting for process joins / queue drains.
+        cleanup_thread = threading.Thread(
+            target=self._cleanup_blocking,
+            daemon=True,
+            name="loopback-cleanup",
+        )
+        cleanup_thread.start()
+
+    def _cleanup_blocking(self) -> None:
+        """Cleanup that may block. Runs in a background thread."""
+        # Wait for reader thread to exit
         if self._reader_thread is not None:
-            self._reader_thread.join(timeout=2.0)
+            self._reader_thread.join(timeout=3.0)
             self._reader_thread = None
 
-        self._cleanup()
-
-    def _cleanup(self) -> None:
-        """Terminate the child process and drain the queue."""
+        # Kill child process
         if self._process is not None:
-            # Give it a moment to exit cleanly
-            self._process.join(timeout=2.0)
+            self._process.join(timeout=1.0)
             if self._process.is_alive():
-                log.warning("Loopback worker did not exit — terminating")
+                log.info("Loopback worker still alive — terminating")
                 try:
-                    self._process.terminate()
-                    self._process.join(timeout=1.0)
+                    self._process.kill()
                 except Exception:
                     pass
-                if self._process.is_alive():
-                    try:
-                        self._process.kill()
-                    except Exception:
-                        pass
-            log.info("Loopback worker process ended (exit code %s)", self._process.exitcode)
+                self._process.join(timeout=1.0)
+            exit_code = self._process.exitcode if self._process else None
+            log.info("Loopback worker ended (exit code %s)", exit_code)
             self._process = None
 
-        # Drain and close the queue
+        # Drain and close queue — do this AFTER process is dead
         if self._audio_queue is not None:
             try:
-                while not self._audio_queue.empty():
+                # Brief drain — don't loop forever
+                for _ in range(100):
+                    if self._audio_queue.empty():
+                        break
                     self._audio_queue.get_nowait()
+            except Exception:
+                pass
+            try:
                 self._audio_queue.close()
+                self._audio_queue.join_thread()
             except Exception:
                 pass
             self._audio_queue = None
 
         self._stop_event = None
+        log.info("Loopback cleanup complete")
 
     def close(self) -> None:
         """Release resources."""
