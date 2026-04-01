@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -32,9 +33,6 @@ class MeetingListItem(QWidget):
 
     clicked = Signal(int)
     delete_requested = Signal(int)
-
-    # Max text width for eliding (sidebar is 260px minus margins)
-    _TEXT_MAX_WIDTH = 210
 
     def __init__(self, meeting: Meeting, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -54,7 +52,10 @@ class MeetingListItem(QWidget):
         self._name_label = QLabel(name_text)
         self._name_label.setObjectName("sidebarItemName")
         self._name_label.setWordWrap(False)
-        self._name_label.setMaximumWidth(self._TEXT_MAX_WIDTH)
+        # Let the label elide text naturally via the layout
+        self._name_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         top_row.addWidget(self._name_label, 1)
 
         self._delete_btn = QPushButton("\u00d7")
@@ -84,29 +85,42 @@ class MeetingListItem(QWidget):
 
         meta_label = QLabel("  \u00b7  ".join(meta_parts))
         meta_label.setObjectName("sidebarItemMeta")
-        meta_label.setMaximumWidth(self._TEXT_MAX_WIDTH)
         layout.addWidget(meta_label)
 
         # Transcript preview (first line, elided)
-        preview_text = ""
+        self._preview_text = ""
         if meeting.transcript_text:
             lines = [l.strip() for l in meeting.transcript_text.split("\n") if l.strip()]
             if lines:
                 raw = lines[0]
                 if raw.startswith("[") and "]" in raw:
                     raw = raw[raw.index("]") + 1:].strip()
-                preview_text = raw[:80]
+                self._preview_text = raw[:80]
 
-        if preview_text:
-            preview_label = QLabel()
-            preview_label.setObjectName("sidebarItemPreview")
-            preview_label.setWordWrap(False)
-            preview_label.setMaximumWidth(self._TEXT_MAX_WIDTH)
-            # Elide with font metrics
-            fm = QFontMetrics(preview_label.font())
-            elided = fm.elidedText(preview_text, Qt.TextElideMode.ElideRight, self._TEXT_MAX_WIDTH)
-            preview_label.setText(elided)
-            layout.addWidget(preview_label)
+        self._preview_label = None
+        if self._preview_text:
+            self._preview_label = QLabel()
+            self._preview_label.setObjectName("sidebarItemPreview")
+            self._preview_label.setWordWrap(False)
+            self._update_preview_elision()
+            layout.addWidget(self._preview_label)
+
+    def _update_preview_elision(self) -> None:
+        """Elide preview text based on current widget width."""
+        if not self._preview_label or not self._preview_text:
+            return
+        available = self.width() - 24  # subtract margins
+        if available < 40:
+            available = 120  # fallback before first layout
+        fm = QFontMetrics(self._preview_label.font())
+        elided = fm.elidedText(
+            self._preview_text, Qt.TextElideMode.ElideRight, available
+        )
+        self._preview_label.setText(elided)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._update_preview_elision()
 
     def set_selected(self, selected: bool) -> None:
         self.setProperty("selected", selected)
@@ -138,7 +152,10 @@ class Sidebar(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("sidebar")
-        self.setFixedWidth(260)
+        self.setMinimumWidth(180)
+        self.setMaximumWidth(350)
+        # Default preferred width
+        self.resize(260, self.height())
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

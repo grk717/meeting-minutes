@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
     QSizePolicy,
@@ -104,7 +105,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Meetily")
-        self.setMinimumSize(1100, 650)
+        self.setMinimumSize(700, 500)
         self.resize(1440, 800)
 
         # ── Crash protection ──
@@ -182,6 +183,7 @@ class MainWindow(QMainWindow):
         # ── Right pane (main content) ──
         right_pane = QWidget()
         right_pane.setStyleSheet("background-color: #0d0d14;")
+        right_pane.setMinimumWidth(400)
         right_layout = QVBoxLayout(right_pane)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
@@ -236,11 +238,23 @@ class MainWindow(QMainWindow):
         self._speaker_panel.mapping_applied.connect(self._on_speaker_mapping_applied)
         right_layout.addWidget(self._speaker_panel)
 
-        # ── Recording controls section ──
+        # ── Recording controls section (scrollable) ──
         self._rec_widget = QWidget()
         rec_outer = QVBoxLayout(self._rec_widget)
-        rec_outer.setContentsMargins(24, 20, 24, 0)
-        rec_outer.setSpacing(16)
+        rec_outer.setContentsMargins(0, 0, 0, 0)
+        rec_outer.setSpacing(0)
+
+        self._rec_scroll = QScrollArea()
+        self._rec_scroll.setWidgetResizable(True)
+        self._rec_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._rec_scroll.setStyleSheet("QScrollArea { background-color: transparent; border: none; }")
+
+        rec_scroll_content = QWidget()
+        rec_scroll_layout = QVBoxLayout(rec_scroll_content)
+        rec_scroll_layout.setContentsMargins(24, 20, 24, 0)
+        rec_scroll_layout.setSpacing(16)
 
         # Recording card
         rec_card = QWidget()
@@ -250,8 +264,8 @@ class MainWindow(QMainWindow):
             "border: 1px solid #1e1e32; border-radius: 12px; }"
         )
         rec_card_layout = QVBoxLayout(rec_card)
-        rec_card_layout.setContentsMargins(24, 20, 24, 20)
-        rec_card_layout.setSpacing(16)
+        rec_card_layout.setContentsMargins(16, 16, 16, 16)
+        rec_card_layout.setSpacing(12)
 
         # Meeting name row
         name_row = QHBoxLayout()
@@ -284,7 +298,7 @@ class MainWindow(QMainWindow):
         viz_area = QWidget()
         viz_layout = QHBoxLayout(viz_area)
         viz_layout.setContentsMargins(0, 8, 0, 8)
-        viz_layout.setSpacing(32)
+        viz_layout.setSpacing(16)
 
         # Left: Mic level bars + label
         mic_col = QVBoxLayout()
@@ -363,14 +377,26 @@ class MainWindow(QMainWindow):
         self._saved_label.setWordWrap(True)
         rec_card_layout.addWidget(self._saved_label)
 
-        rec_outer.addWidget(rec_card)
+        rec_scroll_layout.addWidget(rec_card)
+        rec_scroll_layout.addStretch()
 
-        right_layout.addWidget(self._rec_widget)
+        self._rec_scroll.setWidget(rec_scroll_content)
+        rec_outer.addWidget(self._rec_scroll)
+
+        # ── Vertical splitter: recording controls | transcript+summary ──
+        self._vertical_splitter = QSplitter(Qt.Orientation.Vertical)
+        self._vertical_splitter.setChildrenCollapsible(False)
+        self._vertical_splitter.setHandleWidth(5)
+        self._vertical_splitter.setStyleSheet(
+            "QSplitter::handle { background: transparent; }"
+        )
+
+        self._vertical_splitter.addWidget(self._rec_widget)
 
         # ── Content area: Transcript + Summary with visible splitter ──
         content_wrapper = QWidget()
         content_wrapper_layout = QVBoxLayout(content_wrapper)
-        content_wrapper_layout.setContentsMargins(24, 16, 24, 24)
+        content_wrapper_layout.setContentsMargins(16, 12, 16, 16)
         content_wrapper_layout.setSpacing(0)
 
         self._content_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -380,6 +406,7 @@ class MainWindow(QMainWindow):
 
         # Transcript panel
         self._transcript_panel = TranscriptPanel()
+        self._transcript_panel.setMinimumWidth(150)
         self._transcript_panel.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
@@ -387,6 +414,7 @@ class MainWindow(QMainWindow):
 
         # Summary panel
         self._summary_panel = SummaryPanel()
+        self._summary_panel.setMinimumWidth(150)
         self._summary_panel.generate_requested.connect(self._on_generate_summary)
         self._summary_panel.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
@@ -398,11 +426,20 @@ class MainWindow(QMainWindow):
         self._content_splitter.setStretchFactor(1, 2)
 
         content_wrapper_layout.addWidget(self._content_splitter)
-        right_layout.addWidget(content_wrapper, 1)
+
+        self._vertical_splitter.addWidget(content_wrapper)
+
+        # Recording controls: don't stretch, content: stretches
+        self._vertical_splitter.setStretchFactor(0, 0)
+        self._vertical_splitter.setStretchFactor(1, 1)
+
+        right_layout.addWidget(self._vertical_splitter, 1)
 
         self._splitter.addWidget(right_pane)
-        self._splitter.setStretchFactor(0, 0)  # sidebar: fixed
+        self._splitter.setStretchFactor(0, 0)  # sidebar: minimal stretch
         self._splitter.setStretchFactor(1, 1)  # content: stretches
+        # Set initial sidebar width (260px sidebar, rest for content)
+        self._splitter.setSizes([260, 1180])
         root.addWidget(self._splitter, 1)
 
         # Load meeting history
@@ -1176,6 +1213,13 @@ class MainWindow(QMainWindow):
 
     def _on_retranscribe_cancelled(self) -> None:
         self._retranscribe_widget.reset()
+
+    # ── Window events ──────────────────────────────────────────
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        # Reposition toasts to adapt to new window size
+        self._toasts._reposition()
 
     # ── Cleanup ─────────────────────────────────────────────────
 

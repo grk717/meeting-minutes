@@ -36,6 +36,10 @@ _ICONS = {
 class Toast(QFrame):
     """Single auto-dismissing notification bubble."""
 
+    # Toast sizing constraints
+    _MAX_WIDTH = 360
+    _MIN_WIDTH = 200
+
     def __init__(
         self,
         message: str,
@@ -46,7 +50,9 @@ class Toast(QFrame):
         super().__init__(parent)
         self.setObjectName("toast")
         self.setProperty("toastType", toast_type.value)
-        self.setFixedWidth(360)
+        # Use max width constraint instead of fixed width; actual width set by manager
+        self.setMaximumWidth(self._MAX_WIDTH)
+        self.setMinimumWidth(self._MIN_WIDTH)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 12, 12, 12)
@@ -150,12 +156,19 @@ class ToastManager:
             self._reposition()
 
     def _reposition(self) -> None:
-        """Stack toasts from top-right of the parent widget."""
+        """Stack toasts from top-right of the parent widget, adapting to window size."""
         parent_rect = self._parent.rect()
-        x = parent_rect.right() - 360 - self._margin
+        # Calculate toast width: up to MAX_WIDTH but capped at parent width minus margins
+        available_width = parent_rect.width() - self._margin * 2
+        toast_width = min(Toast._MAX_WIDTH, max(Toast._MIN_WIDTH, available_width))
+
+        x = parent_rect.right() - toast_width - self._margin
+        # Ensure x doesn't go negative on very small windows
+        x = max(self._margin, x)
         y = self._margin
 
         for toast in self._toasts:
+            toast.setFixedWidth(toast_width)
             toast.move(x, y)
             toast.raise_()
             y += toast.sizeHint().height() + self._gap

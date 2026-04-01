@@ -135,7 +135,7 @@ QScrollBar::sub-page:horizontal {
 }
 
 #durationLabel {
-    font-size: 44px;
+    font-size: 36px;
     font-weight: 200;
     color: #f0f0f5;
     font-family: "JetBrains Mono", "SF Mono", "Cascadia Mono", "Consolas", monospace;
