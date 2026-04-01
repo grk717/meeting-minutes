@@ -6,7 +6,7 @@ Redesigned with cleaner action buttons and better visual hierarchy.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from meetily.storage.database import Meeting
 from meetily.ui.button_style import apply_button_style
@@ -20,6 +20,7 @@ class MeetingDetailBar(QWidget):
     copy_requested = Signal()
     export_txt_requested = Signal()
     export_md_requested = Signal()
+    name_changed = Signal(str)  # emitted with the new name
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -43,9 +44,10 @@ class MeetingDetailBar(QWidget):
         info_col.setContentsMargins(0, 0, 0, 0)
         info_col.setSpacing(1)
 
-        self._title_label = QLabel("")
-        self._title_label.setObjectName("meetingDetailTitle")
-        info_col.addWidget(self._title_label)
+        self._title_edit = QLineEdit("")
+        self._title_edit.setObjectName("meetingDetailTitle")
+        self._title_edit.editingFinished.connect(self._on_name_edited)
+        info_col.addWidget(self._title_edit)
 
         self._meta_label = QLabel("")
         self._meta_label.setObjectName("meetingDetailMeta")
@@ -82,8 +84,12 @@ class MeetingDetailBar(QWidget):
         self._export_md_btn.clicked.connect(self.export_md_requested.emit)
         layout.addWidget(self._export_md_btn)
 
+        self._original_name = ""
+
     def set_meeting(self, meeting: Meeting) -> None:
-        self._title_label.setText(meeting.name or "Untitled Meeting")
+        name = meeting.name or "Untitled Meeting"
+        self._original_name = name
+        self._title_edit.setText(name)
 
         meta_parts = []
         if meeting.created_at:
@@ -99,3 +105,12 @@ class MeetingDetailBar(QWidget):
 
         # Only enable retranscribe if there's a WAV file
         self._retranscribe_btn.setEnabled(bool(meeting.wav_path))
+
+    def _on_name_edited(self) -> None:
+        new_name = self._title_edit.text().strip()
+        if not new_name:
+            self._title_edit.setText(self._original_name)
+            return
+        if new_name != self._original_name:
+            self._original_name = new_name
+            self.name_changed.emit(new_name)

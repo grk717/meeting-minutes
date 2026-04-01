@@ -103,6 +103,15 @@ class MeetingDatabase:
         self._conn.commit()
         return cursor.lastrowid
 
+    def update_name(self, meeting_id: int, name: str) -> None:
+        """Update name for an existing meeting."""
+        now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        self._conn.execute(
+            "UPDATE meetings SET name = ?, updated_at = ? WHERE id = ?",
+            (name, now, meeting_id),
+        )
+        self._conn.commit()
+
     def update_summary(self, meeting_id: int, summary_text: str) -> None:
         """Update summary for an existing meeting."""
         now = time.strftime("%Y-%m-%dT%H:%M:%S")

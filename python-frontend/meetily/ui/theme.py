@@ -557,6 +557,15 @@ MeetingListItem:hover {
     font-weight: 600;
     color: #e8ecf0;
     letter-spacing: -0.2px;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+#meetingDetailTitle:focus {
+    border-color: #3b82c4;
+    background-color: #0c1219;
 }
 
 #meetingDetailMeta {

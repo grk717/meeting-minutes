@@ -223,6 +223,7 @@ class MainWindow(QMainWindow):
         self._detail_bar.copy_requested.connect(self._on_copy_meeting)
         self._detail_bar.export_txt_requested.connect(self._on_export_txt)
         self._detail_bar.export_md_requested.connect(self._on_export_md)
+        self._detail_bar.name_changed.connect(self._on_meeting_name_changed)
         right_layout.addWidget(self._detail_bar)
 
         # ── Retranscribe progress widget (hidden by default) ──
@@ -954,6 +955,14 @@ class MainWindow(QMainWindow):
         ):
             self._show_recording_view()
 
+        self._refresh_sidebar()
+
+    def _on_meeting_name_changed(self, new_name: str) -> None:
+        meeting = self._current_detail_meeting
+        if not meeting or not meeting.id:
+            return
+        self._db.update_name(meeting.id, new_name)
+        meeting.name = new_name
         self._refresh_sidebar()
 
     # ── Copy / export ────────────────────────────────────────────
