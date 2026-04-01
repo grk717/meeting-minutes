@@ -50,9 +50,11 @@ class Toast(QFrame):
         super().__init__(parent)
         self.setObjectName("toast")
         self.setProperty("toastType", toast_type.value)
-        # Use max width constraint instead of fixed width; actual width set by manager
         self.setMaximumWidth(self._MAX_WIDTH)
         self.setMinimumWidth(self._MIN_WIDTH)
+
+        # Horizontal margins: icon(22) + spacing(12)*2 + close(24) + margins(16+12)
+        self._chrome_width = 22 + 12 + 12 + 24 + 16 + 12  # = 98
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 12, 12, 12)
@@ -65,11 +67,11 @@ class Toast(QFrame):
         layout.addWidget(icon_label)
 
         # Message
-        msg_label = QLabel(message)
-        msg_label.setObjectName("toastMessage")
-        msg_label.setWordWrap(True)
-        msg_label.setMinimumHeight(20)
-        layout.addWidget(msg_label, 1)
+        self._msg_label = QLabel(message)
+        self._msg_label.setObjectName("toastMessage")
+        self._msg_label.setWordWrap(True)
+        self._msg_label.setMinimumHeight(20)
+        layout.addWidget(self._msg_label, 1)
 
         # Close button
         close_btn = QPushButton("\u2715")
@@ -92,6 +94,16 @@ class Toast(QFrame):
 
         self._dismissed = False
         self._manager: ToastManager | None = None
+
+    def compute_height_for_width(self, w: int) -> int:
+        """Calculate the correct total height given a fixed width."""
+        text_width = w - self._chrome_width
+        text_height = self._msg_label.fontMetrics().boundingRect(
+            0, 0, text_width, 0,
+            Qt.TextFlag.TextWordWrap, self._msg_label.text(),
+        ).height()
+        # Vertical margins (12 top + 12 bottom) + at least 20px for single line
+        return max(text_height, 20) + 24
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -165,10 +177,12 @@ class ToastManager:
         x = parent_rect.right() - toast_width - self._margin
         # Ensure x doesn't go negative on very small windows
         x = max(self._margin, x)
-        y = self._margin
+        y = self._margin + 44  # offset below header bar
 
         for toast in self._toasts:
             toast.setFixedWidth(toast_width)
+            h = toast.compute_height_for_width(toast_width)
+            toast.setFixedHeight(h)
             toast.move(x, y)
             toast.raise_()
-            y += toast.sizeHint().height() + self._gap
+            y += h + self._gap

@@ -1216,8 +1216,25 @@ class MainWindow(QMainWindow):
 
     # ── Window events ──────────────────────────────────────────
 
+    # Aspect ratio limits: prevent unusably narrow or short windows
+    _MIN_ASPECT = 4 / 3   # width/height — can't be too narrow/tall
+    _MAX_ASPECT = 21 / 9  # width/height — can't be too wide/short
+
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        # Enforce aspect ratio bounds
+        w, h = self.width(), self.height()
+        aspect = w / max(h, 1)
+        if aspect < self._MIN_ASPECT:
+            # Too narrow — increase width to match min aspect
+            new_w = int(h * self._MIN_ASPECT)
+            self.resize(new_w, h)
+            return
+        if aspect > self._MAX_ASPECT:
+            # Too wide — increase height to match max aspect
+            new_h = int(w / self._MAX_ASPECT)
+            self.resize(w, new_h)
+            return
         # Reposition toasts to adapt to new window size
         self._toasts._reposition()
 
