@@ -31,7 +31,6 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
     QSizePolicy,
@@ -238,23 +237,14 @@ class MainWindow(QMainWindow):
         self._speaker_panel.mapping_applied.connect(self._on_speaker_mapping_applied)
         right_layout.addWidget(self._speaker_panel)
 
-        # ── Recording controls section (scrollable) ──
+        # ── Recording controls section ──
         self._rec_widget = QWidget()
-        rec_outer = QVBoxLayout(self._rec_widget)
-        rec_outer.setContentsMargins(0, 0, 0, 0)
-        rec_outer.setSpacing(0)
-
-        self._rec_scroll = QScrollArea()
-        self._rec_scroll.setWidgetResizable(True)
-        self._rec_scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        self._rec_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        self._rec_scroll.setStyleSheet("QScrollArea { background-color: transparent; border: none; }")
-
-        rec_scroll_content = QWidget()
-        rec_scroll_layout = QVBoxLayout(rec_scroll_content)
-        rec_scroll_layout.setContentsMargins(24, 20, 24, 0)
-        rec_scroll_layout.setSpacing(16)
+        rec_outer = QVBoxLayout(self._rec_widget)
+        rec_outer.setContentsMargins(24, 20, 24, 8)
+        rec_outer.setSpacing(16)
 
         # Recording card
         rec_card = QWidget()
@@ -377,11 +367,7 @@ class MainWindow(QMainWindow):
         self._saved_label.setWordWrap(True)
         rec_card_layout.addWidget(self._saved_label)
 
-        rec_scroll_layout.addWidget(rec_card)
-        rec_scroll_layout.addStretch()
-
-        self._rec_scroll.setWidget(rec_scroll_content)
-        rec_outer.addWidget(self._rec_scroll)
+        rec_outer.addWidget(rec_card)
 
         right_layout.addWidget(self._rec_widget)
 
