@@ -224,6 +224,22 @@ QLineEdit::placeholder {
     color: #3e5868;
 }
 
+QPlainTextEdit {
+    background-color: #0c1219;
+    border: 1px solid #1e3040;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #e8ecf0;
+    font-size: 13px;
+    selection-background-color: #3b82c4;
+    selection-color: #ffffff;
+}
+
+QPlainTextEdit:focus {
+    border-color: #3b82c4;
+    background-color: #0e1822;
+}
+
 /* ================================================================
    COMBO BOXES
    ================================================================ */
