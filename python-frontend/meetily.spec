@@ -1,12 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec file for Meetily.
+"""PyInstaller spec file for ZennoCall.
 
 Build:
     pyinstaller meetily.spec --noconfirm
 
 Output:
-    dist/Meetily/          (one-dir bundle on all platforms)
-    dist/Meetily.app       (macOS only)
+    dist/ZennoCall/          (one-dir bundle on all platforms)
+    dist/ZennoCall.app       (macOS only)
 """
 import platform
 from pathlib import Path
@@ -79,7 +79,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Meetily",
+    name="ZennoCall",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -101,19 +101,19 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="Meetily",
+    name="ZennoCall",
 )
 
 # --- macOS .app bundle ---
 if _system == "Darwin":
     app = BUNDLE(
         coll,
-        name="Meetily.app",
+        name="ZennoCall.app",
         icon=_icon,
-        bundle_identifier="com.meetily.app",
+        bundle_identifier="com.zennocall.app",
         info_plist={
             "NSMicrophoneUsageDescription": (
-                "Meetily needs microphone access to record meetings."
+                "ZennoCall needs microphone access to record meetings."
             ),
             "NSHighResolutionCapable": True,
             "CFBundleShortVersionString": "0.1.0",

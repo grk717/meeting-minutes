@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-echo === Meetily Build ===
+echo === ZennoCall Build ===
 
 cd /d "%~dp0"
 
@@ -29,8 +29,8 @@ python -m PyInstaller meetily.spec --noconfirm
 
 echo.
 echo === PyInstaller Build Complete ===
-echo Output: dist\Meetily\
-echo Run:    dist\Meetily\Meetily.exe
+echo Output: dist\ZennoCall\
+echo Run:    dist\ZennoCall\ZennoCall.exe
 
 :: --- Optional: Build Windows installer with Inno Setup ---
 if /i "%1"=="--installer" goto :build_installer
@@ -67,7 +67,7 @@ if errorlevel 1 (
 
 echo.
 echo === Installer Build Complete ===
-echo Output: dist\Meetily-0.1.0-Setup.exe
+echo Output: dist\ZennoCall-0.1.0-Setup.exe
 
 :done
 endlocal

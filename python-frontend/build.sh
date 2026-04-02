@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "=== Meetily Build ==="
+echo "=== ZennoCall Build ==="
 
 PYTHON="${PYTHON:-python3}"
 if ! command -v "$PYTHON" &>/dev/null; then
@@ -32,9 +32,9 @@ echo "Running PyInstaller..."
 echo ""
 echo "=== Build Complete ==="
 if [ "$(uname)" = "Darwin" ]; then
-    echo "Output: dist/Meetily.app"
-    echo "Run:    open dist/Meetily.app"
+    echo "Output: dist/ZennoCall.app"
+    echo "Run:    open dist/ZennoCall.app"
 else
-    echo "Output: dist/Meetily/"
-    echo "Run:    ./dist/Meetily/Meetily"
+    echo "Output: dist/ZennoCall/"
+    echo "Run:    ./dist/ZennoCall/ZennoCall"
 fi

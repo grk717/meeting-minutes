@@ -1,8 +1,8 @@
-; Meetily (ZennoCall) - Inno Setup Script
-; Builds a Windows installer from the PyInstaller dist/Meetily/ output.
+; ZennoCall - Inno Setup Script
+; Builds a Windows installer from the PyInstaller dist/ZennoCall/ output.
 ;
 ; Prerequisites:
-;   1. Run `build.bat` first to produce dist\Meetily\
+;   1. Run `build.bat` first to produce dist\ZennoCall\
 ;   2. Install Inno Setup 6.x  (https://jrsoftware.org/isinfo.php)
 ;   3. Compile this script:  iscc installer\meetily.iss
 ;
@@ -12,10 +12,10 @@
 ;   - Register an uninstaller
 ;   - Install VC++ Redistributable if missing
 
-#define MyAppName      "Meetily"
+#define MyAppName      "ZennoCall"
 #define MyAppVersion   "0.1.0"
-#define MyAppPublisher "Meetily"
-#define MyAppExeName   "Meetily.exe"
+#define MyAppPublisher "ZennoCall"
+#define MyAppExeName   "ZennoCall.exe"
 #define MyAppURL       "https://github.com/grk717/meeting-minutes"
 
 [Setup]
@@ -30,7 +30,7 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 ; Output location and filename
 OutputDir=..\dist
-OutputBaseFilename=Meetily-{#MyAppVersion}-Setup
+OutputBaseFilename=ZennoCall-{#MyAppVersion}-Setup
 ; Compression
 Compression=lzma2/max
 SolidCompression=yes
@@ -54,7 +54,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; Main application files from PyInstaller output
-Source: "..\dist\Meetily\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\ZennoCall\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; VC++ Redistributable (x64) - downloaded separately, see README
 ; If you place vc_redist.x64.exe next to this .iss file, it will be bundled.
