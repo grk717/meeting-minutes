@@ -98,11 +98,6 @@ class SettingsDialog(QDialog):
         )
         layout.addWidget(url_widget)
 
-        key_widget, self._key_input = _make_field(
-            "API Key", current["asr_api_key"], "Optional", is_password=True
-        )
-        layout.addWidget(key_widget)
-
         layout.addStretch()
         return tab
 
@@ -145,16 +140,6 @@ class SettingsDialog(QDialog):
         )
         layout.addWidget(llm_url_widget)
 
-        llm_key_widget, self._llm_key_input = _make_field(
-            "API Key", current["llm_api_key"], "Optional", is_password=True
-        )
-        layout.addWidget(llm_key_widget)
-
-        llm_model_widget, self._llm_model_input = _make_field(
-            "Model", current["llm_model"], "gpt-4o-mini"
-        )
-        layout.addWidget(llm_model_widget)
-
         # System prompt
         prompt_label = QLabel("System Prompt")
         prompt_label.setObjectName("settingsFieldLabel")
@@ -182,10 +167,7 @@ class SettingsDialog(QDialog):
     def _save(self) -> None:
         settings = QSettings("ZennoCall", "ZennoCall")
         settings.setValue("asr_url", self._url_input.text().strip())
-        settings.setValue("asr_api_key", self._key_input.text().strip())
         settings.setValue("llm_url", self._llm_url_input.text().strip())
-        settings.setValue("llm_api_key", self._llm_key_input.text().strip())
-        settings.setValue("llm_model", self._llm_model_input.text().strip())
         settings.setValue("llm_system_prompt", self._llm_prompt_input.toPlainText())
         settings.setValue("backend_url", self._backend_url_input.text().strip())
         self.accept()
