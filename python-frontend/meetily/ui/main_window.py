@@ -585,6 +585,7 @@ class MainWindow(QMainWindow):
         self._transcript_panel.clear()
         self._summary_panel.clear()
         self._last_saved_path = None
+        self._last_meeting_db_id = None  # Clear stale autosave ID from previous recording
 
         meeting_name = self._name_input.text().strip()
         self._audio.start_recording(
@@ -633,24 +634,22 @@ class MainWindow(QMainWindow):
             try:
                 segments = list(self._transcript_panel.get_raw_segments())
                 meeting_name = self._name_input.text().strip() or "Untitled Meeting"
+                # Use the duration snapshot taken before chunks were consumed
+                duration = self._audio._last_duration_secs
+                wav_str = str(saved_path) if saved_path else ""
                 if autosave_id:
-                    # Update the autosave record with final data
-                    self._db.update_transcript(autosave_id, transcript, segments)
-                    # Update name (remove " (recording...)" suffix) and wav_path
-                    conn = self._db._conn
-                    now = time.strftime("%Y-%m-%dT%H:%M:%S")
-                    conn.execute(
-                        "UPDATE meetings SET name=?, wav_path=?, duration_secs=?, updated_at=? WHERE id=?",
-                        (meeting_name, str(saved_path) if saved_path else "", self._audio.get_recording_duration(), now, autosave_id),
+                    # Update the autosave record with all final data in one call
+                    self._db.update_meeting_final(
+                        autosave_id, meeting_name, wav_str, duration,
+                        transcript, segments,
                     )
-                    conn.commit()
                     self._last_meeting_db_id = autosave_id
                 else:
                     meeting = Meeting(
                         name=meeting_name,
                         created_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
-                        duration_secs=self._audio.get_recording_duration(),
-                        wav_path=str(saved_path) if saved_path else "",
+                        duration_secs=duration,
+                        wav_path=wav_str,
                         transcript_text=transcript,
                         transcript_segments=segments,
                     )

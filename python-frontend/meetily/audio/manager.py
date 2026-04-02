@@ -152,6 +152,14 @@ class AudioManager:
         self._mic_chunks: list[np.ndarray] = []
         self._sys_chunks: list[np.ndarray] = []
 
+        # Stream start timestamps for time-alignment during mixing.
+        # Set to monotonic time when each stream delivers its first chunk.
+        self._mic_first_chunk_time: float | None = None
+        self._sys_first_chunk_time: float | None = None
+
+        # Duration snapshot — set just before chunks are consumed in stop_recording
+        self._last_duration_secs: float = 0.0
+
         # Level metering (smoothed)
         self._levels = AudioLevels()
         self._last_level_emit: float = 0.0
@@ -348,10 +356,13 @@ class AudioManager:
         save_dir.mkdir(parents=True, exist_ok=True)
         self._save_path = save_dir
 
-        # Clear previous buffers
+        # Clear previous buffers and timing state
         with self._lock:
             self._mic_chunks.clear()
             self._sys_chunks.clear()
+        self._mic_first_chunk_time = None
+        self._sys_first_chunk_time = None
+        self._last_duration_secs = 0.0
 
         # Start mic stream
         if mic_device is not None:
@@ -419,6 +430,9 @@ class AudioManager:
 
         # Stop watchdog first
         self._stop_watchdog()
+
+        # Snapshot duration before chunks are consumed by _save_audio()
+        self._last_duration_secs = self.get_recording_duration()
 
         # Stop streams with timeout to handle dead/hung streams
         self._stop_stream("mic", self._mic_stream)
@@ -510,7 +524,10 @@ class AudioManager:
         if self._state != RecordingState.RECORDING:
             return
 
-        self._mic_last_data = time.monotonic()
+        now = time.monotonic()
+        self._mic_last_data = now
+        if self._mic_first_chunk_time is None:
+            self._mic_first_chunk_time = now
         audio = indata[:, 0].copy()
 
         with self._lock:
@@ -563,7 +580,10 @@ class AudioManager:
         if self._state != RecordingState.RECORDING:
             return
 
-        self._sys_last_data = time.monotonic()
+        now = time.monotonic()
+        self._sys_last_data = now
+        if self._sys_first_chunk_time is None:
+            self._sys_first_chunk_time = now
 
         audio = indata[:, 0].copy()
 
@@ -609,7 +629,10 @@ class AudioManager:
         if self._state != RecordingState.RECORDING:
             return
 
-        self._sys_last_data = time.monotonic()
+        now = time.monotonic()
+        self._sys_last_data = now
+        if self._sys_first_chunk_time is None:
+            self._sys_first_chunk_time = now
         audio_copy = audio.copy()
 
         with self._lock:
@@ -738,7 +761,25 @@ class AudioManager:
 
         # Mix: if both streams, combine them (simple average mix)
         if len(mic_audio) > 0 and len(sys_audio) > 0:
-            # Align lengths (pad shorter with zeros)
+            # Time-align streams: the stream that started later gets silence
+            # prepended so that both streams are synchronized in the mix.
+            mic_t0 = self._mic_first_chunk_time
+            sys_t0 = self._sys_first_chunk_time
+            if mic_t0 is not None and sys_t0 is not None:
+                offset_secs = mic_t0 - sys_t0  # positive = mic started later
+                offset_samples = int(abs(offset_secs) * SAMPLE_RATE)
+                if offset_samples > 0:
+                    silence = np.zeros(offset_samples, dtype=np.float32)
+                    if offset_secs > 0:
+                        # Mic started later — prepend silence to mic
+                        mic_audio = np.concatenate([silence, mic_audio])
+                        log.info("Time-align: mic started %.3fs after system, prepended %d samples", offset_secs, offset_samples)
+                    else:
+                        # System started later — prepend silence to system
+                        sys_audio = np.concatenate([silence, sys_audio])
+                        log.info("Time-align: system started %.3fs after mic, prepended %d samples", -offset_secs, offset_samples)
+
+            # Align lengths (pad shorter with zeros at the end)
             max_len = max(len(mic_audio), len(sys_audio))
             if len(mic_audio) < max_len:
                 mic_audio = np.pad(mic_audio, (0, max_len - len(mic_audio)))

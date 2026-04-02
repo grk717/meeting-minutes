@@ -121,6 +121,31 @@ class MeetingDatabase:
         )
         self._conn.commit()
 
+    def update_meeting_final(
+        self,
+        meeting_id: int,
+        name: str,
+        wav_path: str,
+        duration_secs: float,
+        transcript_text: str,
+        segments: list[tuple],
+    ) -> None:
+        """Finalize an autosaved meeting with all final data.
+
+        Called when recording stops to update the autosave record with
+        the final name, WAV path, duration, and transcript in one atomic update.
+        """
+        now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        segments_json = json.dumps(segments)
+        self._conn.execute(
+            """UPDATE meetings
+               SET name = ?, wav_path = ?, duration_secs = ?,
+                   transcript_text = ?, transcript_segments = ?, updated_at = ?
+               WHERE id = ?""",
+            (name, wav_path, duration_secs, transcript_text, segments_json, now, meeting_id),
+        )
+        self._conn.commit()
+
     def update_transcript(
         self,
         meeting_id: int,
