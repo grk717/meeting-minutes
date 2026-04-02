@@ -142,9 +142,7 @@ class RetranscribeWidget(QWidget):
             self._dot.setStyleSheet("color: #3b82c4; font-size: 18px;")
 
         elif status == "processing":
-            progress = result.get("progress", 0.0)
-            pct = int(progress * 100)
-            self._status_label.setText(f"Transcribing... {pct}%")
+            self._status_label.setText("Transcribing...")
             self._dot.setStyleSheet("color: #d4a032; font-size: 18px;")
 
         elif status == "completed":
