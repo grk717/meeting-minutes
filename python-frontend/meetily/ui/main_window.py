@@ -720,12 +720,13 @@ class MainWindow(QMainWindow):
         self._summary_panel.set_loading()
 
         client = SummarizationClient(cfg["llm_url"], cfg["llm_api_key"], cfg["llm_model"])
+        custom_prompt = cfg.get("llm_system_prompt", "")
         meeting_name = self._name_input.text().strip() or "Untitled Meeting"
         wav_path = self._last_saved_path
 
         def worker() -> None:
             try:
-                summary = client.summarize(transcript)
+                summary = client.summarize(transcript, system_prompt=custom_prompt)
                 # Save summary file next to WAV if available
                 if wav_path:
                     summary_path = wav_path.with_name(wav_path.stem + "_summary.txt")

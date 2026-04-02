@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -23,6 +24,7 @@ _DEFAULTS = {
     "llm_url": "http://localhost:11434",
     "llm_api_key": "",
     "llm_model": "gpt-4o-mini",
+    "llm_system_prompt": "",
     "backend_url": "http://localhost:5167",
 }
 
@@ -122,6 +124,27 @@ class SettingsDialog(QDialog):
         )
         layout.addWidget(llm_model_widget)
 
+        # System prompt
+        prompt_label = QLabel("System Prompt")
+        prompt_label.setObjectName("settingsFieldLabel")
+        layout.addWidget(prompt_label)
+
+        prompt_hint = QLabel(
+            "Custom instructions for the summarization LLM. "
+            "Leave empty to use the built-in default."
+        )
+        prompt_hint.setObjectName("settingsDesc")
+        prompt_hint.setWordWrap(True)
+        layout.addWidget(prompt_hint)
+
+        self._llm_prompt_input = QPlainTextEdit()
+        self._llm_prompt_input.setPlaceholderText(
+            "e.g. You are a meeting assistant. Summarize the transcript as bullet points..."
+        )
+        self._llm_prompt_input.setPlainText(current["llm_system_prompt"])
+        self._llm_prompt_input.setFixedHeight(120)
+        layout.addWidget(self._llm_prompt_input)
+
         layout.addWidget(_make_divider())
 
         # ── Backend Section ──
@@ -158,6 +181,7 @@ class SettingsDialog(QDialog):
         settings.setValue("llm_url", self._llm_url_input.text().strip())
         settings.setValue("llm_api_key", self._llm_key_input.text().strip())
         settings.setValue("llm_model", self._llm_model_input.text().strip())
+        settings.setValue("llm_system_prompt", self._llm_prompt_input.toPlainText())
         settings.setValue("backend_url", self._backend_url_input.text().strip())
         self.accept()
 
@@ -171,6 +195,7 @@ class SettingsDialog(QDialog):
             "llm_url": settings.value("llm_url", _DEFAULTS["llm_url"]),
             "llm_api_key": settings.value("llm_api_key", _DEFAULTS["llm_api_key"]),
             "llm_model": settings.value("llm_model", _DEFAULTS["llm_model"]),
+            "llm_system_prompt": settings.value("llm_system_prompt", _DEFAULTS["llm_system_prompt"]),
             "backend_url": settings.value(
                 "backend_url", _DEFAULTS["backend_url"]
             ),

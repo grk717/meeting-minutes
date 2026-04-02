@@ -49,11 +49,12 @@ class SummarizationClient:
         self._api_key = api_key
         self._model = model
 
-    def summarize(self, transcript: str) -> str:
+    def summarize(self, transcript: str, system_prompt: str = "") -> str:
         """Summarize a meeting transcript.
 
         Args:
             transcript: Full transcript text (all segments joined).
+            system_prompt: Custom system prompt. Falls back to built-in default if empty.
 
         Returns:
             Summary text from the LLM.
@@ -67,10 +68,12 @@ class SummarizationClient:
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
 
+        prompt = system_prompt.strip() if system_prompt else _SYSTEM_PROMPT
+
         payload = {
             "model": self._model,
             "messages": [
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": prompt},
                 {"role": "user", "content": transcript},
             ],
         }
