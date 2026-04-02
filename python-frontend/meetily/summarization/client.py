@@ -39,12 +39,12 @@ _SYSTEM_PROMPT = (
 class SummarizationClient:
     """Sends transcript to an OpenAI-compatible chat completions endpoint."""
 
-    def __init__(self, base_url: str, api_key: str = "", model: str = "gpt-4o-mini") -> None:
+    def __init__(self, base_url: str, api_key: str = "", model: str = "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4") -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._model = model
 
-    def update_settings(self, base_url: str, api_key: str = "", model: str = "gpt-4o-mini") -> None:
+    def update_settings(self, base_url: str, api_key: str = "", model: str = "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4") -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._model = model
