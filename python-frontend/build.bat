@@ -28,8 +28,46 @@ echo Running PyInstaller...
 python -m PyInstaller meetily.spec --noconfirm
 
 echo.
-echo === Build Complete ===
+echo === PyInstaller Build Complete ===
 echo Output: dist\Meetily\
 echo Run:    dist\Meetily\Meetily.exe
 
+:: --- Optional: Build Windows installer with Inno Setup ---
+if /i "%1"=="--installer" goto :build_installer
+if /i "%1"=="-i" goto :build_installer
+goto :done
+
+:build_installer
+echo.
+echo === Building Installer ===
+
+:: Find Inno Setup compiler
+set "ISCC="
+if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
+    set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+)
+if exist "C:\Program Files\Inno Setup 6\ISCC.exe" (
+    set "ISCC=C:\Program Files\Inno Setup 6\ISCC.exe"
+)
+
+if "%ISCC%"=="" (
+    echo ERROR: Inno Setup 6 not found.
+    echo Install from: https://jrsoftware.org/isinfo.php
+    echo Then re-run:  build.bat --installer
+    exit /b 1
+)
+
+echo Using: %ISCC%
+"%ISCC%" installer\meetily.iss
+
+if errorlevel 1 (
+    echo ERROR: Installer build failed.
+    exit /b 1
+)
+
+echo.
+echo === Installer Build Complete ===
+echo Output: dist\Meetily-0.1.0-Setup.exe
+
+:done
 endlocal
