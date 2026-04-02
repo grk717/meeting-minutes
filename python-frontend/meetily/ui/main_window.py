@@ -430,7 +430,7 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self)
         if dialog.exec() and self._transcription:
             cfg = SettingsDialog.get_settings()
-            self._transcription.update_settings(cfg["asr_url"], cfg["asr_api_key"])
+            self._transcription.update_settings(cfg["asr_url"], cfg["api_key"])
 
     # ── Crash protection & autosave ────────────────────────────
 
@@ -577,7 +577,7 @@ class MainWindow(QMainWindow):
 
         # Start transcription pipeline
         cfg = SettingsDialog.get_settings()
-        self._transcription = TranscriptionManager(cfg["asr_url"], cfg["asr_api_key"])
+        self._transcription = TranscriptionManager(cfg["asr_url"], cfg["api_key"])
         self._transcription.on_transcript = self._on_transcript_from_worker
         self._transcription.on_error = self._on_transcription_error
         self._audio.on_audio_chunk = self._transcription.feed_audio
@@ -708,7 +708,7 @@ class MainWindow(QMainWindow):
             return
 
         cfg = SettingsDialog.get_settings()
-        log.info("LLM config: url=%s, model=%s", cfg["llm_url"], cfg["llm_model"])
+        log.info("LLM config: url=%s", cfg["llm_url"])
         if not cfg["llm_url"]:
             QMessageBox.warning(
                 self,
@@ -719,7 +719,7 @@ class MainWindow(QMainWindow):
 
         self._summary_panel.set_loading()
 
-        client = SummarizationClient(cfg["llm_url"], cfg["llm_api_key"], cfg["llm_model"])
+        client = SummarizationClient(cfg["llm_url"], cfg["api_key"])
         custom_prompt = cfg.get("llm_system_prompt", "")
         meeting_name = self._name_input.text().strip() or "Untitled Meeting"
         wav_path = self._last_saved_path
@@ -1048,7 +1048,7 @@ class MainWindow(QMainWindow):
             wav_path=meeting.wav_path,
             meeting_name=meeting.name,
             asr_url=cfg["asr_url"],
-            asr_api_key=cfg["asr_api_key"],
+            api_key=cfg["api_key"],
             backend_url=cfg["backend_url"],
         )
 

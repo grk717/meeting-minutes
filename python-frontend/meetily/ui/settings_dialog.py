@@ -18,11 +18,9 @@ from PySide6.QtWidgets import (
 )
 
 _DEFAULTS = {
+    "api_key": "",
     "asr_url": "http://localhost:8178",
-    "asr_api_key": "",
     "llm_url": "http://localhost:11434",
-    "llm_api_key": "",
-    "llm_model": "gpt-4o-mini",
     "llm_system_prompt": "",
     "backend_url": "http://localhost:5167",
 }
@@ -66,6 +64,7 @@ class SettingsDialog(QDialog):
 
         # ── Tab widget ──
         tabs = QTabWidget()
+        tabs.addTab(self._build_authorization_tab(current), "Authorization")
         tabs.addTab(self._build_transcription_tab(current), "Transcription")
         tabs.addTab(self._build_retranscription_tab(current), "Retranscription")
         tabs.addTab(self._build_summarization_tab(current), "Summarization")
@@ -79,6 +78,28 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _build_authorization_tab(self, current: dict[str, str]) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(16)
+        layout.setContentsMargins(16, 20, 16, 16)
+
+        desc = QLabel(
+            "API key sent as X-API-Key header with every request to "
+            "transcription, retranscription, and summarization endpoints."
+        )
+        desc.setObjectName("settingsDesc")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        key_widget, self._api_key_input = _make_field(
+            "API Key", current["api_key"], "Enter your API key", is_password=True
+        )
+        layout.addWidget(key_widget)
+
+        layout.addStretch()
+        return tab
 
     def _build_transcription_tab(self, current: dict[str, str]) -> QWidget:
         tab = QWidget()
@@ -166,6 +187,7 @@ class SettingsDialog(QDialog):
 
     def _save(self) -> None:
         settings = QSettings("ZennoCall", "ZennoCall")
+        settings.setValue("api_key", self._api_key_input.text().strip())
         settings.setValue("asr_url", self._url_input.text().strip())
         settings.setValue("llm_url", self._llm_url_input.text().strip())
         settings.setValue("llm_system_prompt", self._llm_prompt_input.toPlainText())
@@ -177,11 +199,9 @@ class SettingsDialog(QDialog):
         """Load saved settings with defaults."""
         settings = QSettings("ZennoCall", "ZennoCall")
         return {
+            "api_key": settings.value("api_key", _DEFAULTS["api_key"]),
             "asr_url": settings.value("asr_url", _DEFAULTS["asr_url"]),
-            "asr_api_key": settings.value("asr_api_key", _DEFAULTS["asr_api_key"]),
             "llm_url": settings.value("llm_url", _DEFAULTS["llm_url"]),
-            "llm_api_key": settings.value("llm_api_key", _DEFAULTS["llm_api_key"]),
-            "llm_model": settings.value("llm_model", _DEFAULTS["llm_model"]),
             "llm_system_prompt": settings.value("llm_system_prompt", _DEFAULTS["llm_system_prompt"]),
             "backend_url": settings.value(
                 "backend_url", _DEFAULTS["backend_url"]

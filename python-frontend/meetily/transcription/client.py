@@ -51,7 +51,7 @@ class TranscriptionClient:
 
         headers = {}
         if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
+            headers["X-API-Key"] = self._api_key
 
         try:
             response = requests.post(

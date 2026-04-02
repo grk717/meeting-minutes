@@ -71,12 +71,12 @@ class RetranscribeWidget(QWidget):
         wav_path: str,
         meeting_name: str,
         asr_url: str,
-        asr_api_key: str = "",
+        api_key: str = "",
         asr_model: str = "whisper-1",
         backend_url: str = "http://localhost:5167",
     ) -> None:
         """Submit a retranscription job and start polling."""
-        self._client = RetranscribeClient(backend_url)
+        self._client = RetranscribeClient(backend_url, api_key=api_key)
         self._job_id = None
         self._status_label.setText("Uploading audio...")
         self._dot.setStyleSheet("color: #d4a032; font-size: 18px;")
@@ -89,7 +89,6 @@ class RetranscribeWidget(QWidget):
                     wav_path=wav_path,
                     meeting_name=meeting_name,
                     asr_url=asr_url,
-                    asr_api_key=asr_api_key,
                     asr_model=asr_model,
                 )
                 self._submit_done.emit(result)

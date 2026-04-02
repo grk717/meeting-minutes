@@ -66,7 +66,7 @@ class SummarizationClient:
 
         headers = {"Content-Type": "application/json"}
         if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
+            headers["X-API-Key"] = self._api_key
 
         prompt = system_prompt.strip() if system_prompt else _SYSTEM_PROMPT
 
