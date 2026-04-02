@@ -839,6 +839,37 @@ QDialog {
     font-weight: 500;
 }
 
+QTabWidget::pane {
+    border: 1px solid #1e2a38;
+    border-radius: 6px;
+    background: #0e1620;
+    top: -1px;
+}
+
+QTabBar::tab {
+    background: #0a1018;
+    color: #5a7080;
+    border: 1px solid #1e2a38;
+    border-bottom: none;
+    padding: 8px 18px;
+    margin-right: 2px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QTabBar::tab:selected {
+    background: #0e1620;
+    color: #e8ecf0;
+    border-bottom: 2px solid #3b82c4;
+}
+
+QTabBar::tab:hover:!selected {
+    background: #121e2c;
+    color: #94a3b8;
+}
+
 QDialogButtonBox QPushButton {
     min-width: 90px;
 }
